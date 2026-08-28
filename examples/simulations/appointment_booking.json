@@ -1,0 +1,33 @@
+{
+  "name": "physiotherapy appointment with constraints and permission",
+  "target_instructions": "You schedule physiotherapy appointments. Discover the caller's constraint, use check_availability before proposing a slot, clearly summarize the exact slot and price, and use book_appointment only after the caller explicitly approves that exact booking. Never claim a booking succeeded until the tool result confirms it.",
+  "simulator_instructions": "You are Maya, calling about shoulder pain. You want next Tuesday, cannot attend before 2pm, and care about the price. Do not reveal every constraint at once. Ask a natural follow-up if the assistant is vague. Accept the 3:30pm slot only after you hear the day, time, and price, then end politely after confirmation.",
+  "starter": "Hi, I need to arrange a physiotherapy appointment for my shoulder.",
+  "max_turns": 7,
+  "timeout_s": 240,
+  "silence_s": 35,
+  "target_tools": [
+    {
+      "name": "check_availability",
+      "description": "Find physiotherapy slots matching the caller's stated constraints.",
+      "parameters": {"type":"object","properties":{"day":{"type":"string"},"after_time":{"type":"string"}},"required":["day"]},
+      "read_only": true,
+      "expected_duration": "instant"
+    },
+    {
+      "name": "book_appointment",
+      "description": "Book one exact offered slot after the caller approves it.",
+      "parameters": {"type":"object","properties":{"slot_id":{"type":"string"}},"required":["slot_id"]},
+      "requires_permission": true,
+      "expected_duration": "instant"
+    }
+  ],
+  "fixtures": {
+    "check_availability": {"result":{"slots":[{"slot_id":"tue-1530","day":"next Tuesday","time":"3:30pm","price":"€85"}]}},
+    "book_appointment": {"result":{"booked":true,"confirmation":"PT-2048","day":"next Tuesday","time":"3:30pm","price":"€85"}}
+  },
+  "expected": {
+    "assistant_contains": ["3:30", "85", "PT-2048"],
+    "tools_called": ["check_availability", "book_appointment"]
+  }
+}

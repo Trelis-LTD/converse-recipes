@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guided customer research · Converse recipe</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>:root{--ink:#18202a;--paper:#f5f2ec;--accent:#6f42c1}body{background:var(--paper);color:var(--ink)}.card{border:0;box-shadow:0 .4rem 1.5rem #18202a12}.turn{border-left:4px solid var(--accent)}.done-field{text-decoration:line-through;color:#198754}</style>
+</head><body><main class="container py-5"><div class="row g-4"><section class="col-lg-7">
+<p class="text-uppercase small fw-bold text-secondary">Converse recipe</p><h1>Urgent-support research interview</h1>
+<p class="lead">The plan defines evidence. Converse owns the interview.</p>
+<div class="card p-4 mb-3"><div class="row g-2"><div class="col-12"><label class="form-label">Converse URL</label><input id="url" class="form-control" value="wss://converse.trelis.com/ws"></div><div class="col-md-5"><label class="form-label">Scoped session ID</label><input id="session" class="form-control"></div><div class="col-md-7"><label class="form-label">Scoped session key</label><input id="key" type="password" class="form-control"></div><div class="col-md-4"><label class="form-label">Modality</label><select id="modality" class="form-select"><option>text</option><option>voice</option></select></div><div class="col-md-8 d-flex align-items-end"><button id="start" class="btn btn-dark w-100">Start interview</button></div></div><p class="small text-secondary mt-2 mb-0">Use a short-lived scoped credential only. Never paste a persistent <code>ck_</code> key into browser code.</p></div>
+<div id="transcript" class="card p-4 mb-3"></div><form id="composer" class="input-group"><input id="message" class="form-control" placeholder="Your answer…"><button class="btn btn-primary">Send</button></form>
+</section><aside class="col-lg-5"><div class="card p-4 sticky-top" style="top:1rem"><h2 class="h5">Evidence collected</h2><div id="fields">Loading plan…</div><hr><pre id="answers" class="small mb-0">{}</pre></div></aside></div></main>
+<script type="module" src="./app.js"></script></body></html>

@@ -1,0 +1,33 @@
+name: Live Converse smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      modality:
+        description: Text or blackholed voice
+        required: true
+        default: text
+        type: choice
+        options: [text, voice]
+
+permissions:
+  contents: read
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          prune-cache: true
+      - run: uv sync --frozen
+      - name: Run two ordinary Converse sessions
+        env:
+          CONVERSE_API_KEY: ${{ secrets.CONVERSE_API_KEY }}
+          CONVERSE_URL: ${{ vars.CONVERSE_URL || 'wss://converse.trelis.com/ws' }}
+        run: uv run converse-sim examples/simulations/appointment_booking.json --modality "${{ inputs.modality }}"

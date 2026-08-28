@@ -1,0 +1,40 @@
+{
+  "name": "an urgent-support workflow interview",
+  "objective": "Understand one real recent escalation deeply enough to identify a useful product intervention, without leading the participant toward a predetermined solution.",
+  "completion": "Reflect back the workflow and its consequence, ask the participant to correct anything important, then thank them and explain that the notes will inform product research.",
+  "fields": [
+    {
+      "key": "participant_context",
+      "description": "The participant's role, team size, and responsibility during escalations."
+    },
+    {
+      "key": "recent_trigger",
+      "description": "A specific recent incident: what triggered it and why it became urgent."
+    },
+    {
+      "key": "workflow_steps",
+      "description": "What actually happened from detection to resolution, including tools and handoffs."
+    },
+    {
+      "key": "painful_moment",
+      "description": "The hardest moment in that incident and why it was hard."
+    },
+    {
+      "key": "impact",
+      "description": "Observable customer, team, time, revenue, or risk consequence."
+    },
+    {
+      "key": "workaround",
+      "description": "How the team copes today and what the workaround costs or fails to cover."
+    },
+    {
+      "key": "ideal_outcome",
+      "description": "What a materially better outcome would look like, stated without prescribing a feature."
+    },
+    {
+      "key": "follow_up_permission",
+      "description": "Whether the participant consents to a follow-up conversation.",
+      "required": false
+    }
+  ]
+}
