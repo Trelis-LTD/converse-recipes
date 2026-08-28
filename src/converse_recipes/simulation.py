@@ -12,6 +12,98 @@ import numpy as np
 from converse_sdk import ConverseMode, ConverseSession
 
 Fixture = Any | Callable[[dict[str, Any]], Any | Awaitable[Any]]
+VOICE_TAIL_S = 2.0
+SIMULATION_SILENCE_NUDGE_S = 3_600.0
+SIMULATION_SILENCE_END_S = 7_200.0
+
+
+class _TextTurnRelay:
+    """Forward committed text only after any tool work behind that turn has settled."""
+
+    def __init__(self, forward: Callable[[str], Awaitable[None]], *, settle_s: float = 0.05):
+        self._forward = forward
+        self._settle_s = settle_s
+        self._idle = asyncio.Event()
+        self._idle.set()
+        self._pending: str | None = None
+        self._tasks: set[asyncio.Task] = set()
+
+    def utterance(self, text: str) -> None:
+        self._pending = text
+
+    def working(self, active: bool) -> None:
+        self._idle.clear() if active else self._idle.set()
+
+    def done(self) -> None:
+        if self._pending is None:
+            return
+        task = asyncio.create_task(self._flush())
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
+    async def _flush(self) -> None:
+        await asyncio.sleep(self._settle_s)
+        await self._idle.wait()
+        text, self._pending = self._pending, None
+        if text:
+            await self._forward(text)
+
+    async def close(self) -> None:
+        for task in list(self._tasks):
+            task.cancel()
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+
+
+async def _close_voice_turn(destination: ConverseSession) -> None:
+    """Keep the blackholed virtual mic alive until the endpointer commits the turn."""
+    await destination.stream_audio(
+        np.zeros(round(16_000 * VOICE_TAIL_S), dtype=np.float32),
+        sr=16_000,
+        chunk_ms=100,
+        realtime=True,
+    )
+
+
+class _VoiceTurnRelay:
+    """Blackhole complete voice turns, including any client-tool continuation."""
+
+    def __init__(self, destination: ConverseSession, *, settle_s: float = 0.05):
+        self._destination = destination
+        self._settle_s = settle_s
+        self._idle = asyncio.Event()
+        self._idle.set()
+        self._chunks: list[np.ndarray] = []
+        self._tasks: set[asyncio.Task] = set()
+
+    def audio(self, chunk: np.ndarray) -> None:
+        self._chunks.append(np.asarray(chunk, dtype=np.float32).copy())
+
+    def working(self, active: bool) -> None:
+        self._idle.clear() if active else self._idle.set()
+
+    def done(self) -> None:
+        if not self._chunks:
+            return
+        task = asyncio.create_task(self._flush())
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
+    async def _flush(self) -> None:
+        await asyncio.sleep(self._settle_s)
+        await self._idle.wait()
+        chunks, self._chunks = self._chunks, []
+        if not chunks:
+            return
+        await self._destination.stream_audio(
+            np.concatenate(chunks), sr=16_000, chunk_ms=100, realtime=True)
+        await _close_voice_turn(self._destination)
+
+    async def close(self) -> None:
+        for task in list(self._tasks):
+            task.cancel()
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
 
 
 @dataclass(frozen=True)
@@ -66,7 +158,7 @@ class SimulationReport:
     def passed(self) -> bool:
         return (
             not self.error
-            and self.termination_reason == "max_turns"
+            and self.termination_reason in {"expectations_met", "max_turns"}
             and all(result["pass"] for result in self.check_results)
         )
 
@@ -123,6 +215,8 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
         mode=ConverseMode(
             modality=modality, instructions=case.target_instructions,
             tools=list(case.target_tools) or None, greeting=False,
+            silence_nudge_s=SIMULATION_SILENCE_NUDGE_S if modality == "voice" else None,
+            silence_end_s=SIMULATION_SILENCE_END_S if modality == "voice" else None,
         ),
     )
     try:
@@ -131,6 +225,8 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
             mode=ConverseMode(
                 modality=modality, instructions=case.simulator_instructions,
                 tools=None, greeting=case.starter if modality == "voice" else False,
+                silence_nudge_s=SIMULATION_SILENCE_NUDGE_S if modality == "voice" else None,
+                silence_end_s=SIMULATION_SILENCE_END_S if modality == "voice" else None,
             ),
         )
     except Exception:
@@ -155,6 +251,15 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
             return
         await destination.send_text(text)
 
+    relays = {
+        "target": _TextTurnRelay(lambda text: forward_text(simulator, text)),
+        "simulator": _TextTurnRelay(lambda text: forward_text(target, text)),
+    }
+    voice_relays = {
+        "target": _VoiceTurnRelay(simulator),
+        "simulator": _VoiceTurnRelay(target),
+    }
+
     async def consume(side: str, source: ConverseSession,
                       destination: ConverseSession) -> None:
         try:
@@ -169,21 +274,36 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
                 elif side == "target" and event.type == "utterance":
                     text = str(event.data.get("text") or "")
                     report.transcript.append({"role": "assistant", "text": text})
+                    if modality == "text":
+                        relays[side].utterance(text)
                     target_turns["count"] += 1
                     if target_turns["count"] >= case.max_turns:
                         report.termination_reason = "max_turns"
                         stop.set()
-                    elif modality == "text" and text:
-                        await forward_text(destination, text)
                 elif side == "simulator" and event.type == "utterance":
                     text = str(event.data.get("text") or "")
                     if modality == "text" and text:
-                        await forward_text(destination, text)
+                        relays[side].utterance(text)
+                elif event.type == "working":
+                    active = bool(event.data.get("active"))
+                    if modality == "text":
+                        relays[side].working(active)
+                    else:
+                        voice_relays[side].working(active)
                 elif event.type == "audio" and modality == "voice" and event.audio is not None:
-                    await destination.send_audio(event.audio)
-                elif event.type == "done" and modality == "voice":
-                    await destination.stream_audio(
-                        np.zeros(16_000, dtype=np.float32), chunk_ms=100, realtime=True)
+                    voice_relays[side].audio(event.audio)
+                elif event.type == "done":
+                    if side == "target" and case.expected:
+                        interim = evaluate_expectations(case, report)
+                        if interim and all(check["pass"] for check in interim):
+                            report.check_results = interim
+                            report.termination_reason = "expectations_met"
+                            stop.set()
+                            continue
+                    if modality == "text":
+                        relays[side].done()
+                    else:
+                        voice_relays[side].done()
                 elif side == "target" and event.type == "tool_call":
                     value, outcome, verified = await _fixture_result(
                         case.fixtures, str(event.data.get("name") or ""),
@@ -230,6 +350,8 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.gather(*(relay.close() for relay in relays.values()))
+        await asyncio.gather(*(relay.close() for relay in voice_relays.values()))
         await asyncio.gather(target.close(), simulator.close(), return_exceptions=True)
     report.check_results = evaluate_expectations(case, report)
     return report
