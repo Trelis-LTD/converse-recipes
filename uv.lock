@@ -40,11 +40,15 @@ wheels = [
 [[package]]
 name = "converse-sdk"
 version = "0.11.0"
-source = { git = "https://github.com/Trelis-LTD/voice-loop-pro.git?subdirectory=sdk%2Fpython&rev=7764c1d44ab8f2f37f065137fb2b8bda82d2421d#7764c1d44ab8f2f37f065137fb2b8bda82d2421d" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/31/4d/d97fcc607a5510ddccd5c1ac8f6a8f9d1a4ab0764547775c0d4bed35434a/converse_sdk-0.11.0.tar.gz", hash = "sha256:b83c1ce4a16f338741fe2ea0f8b407e42349d557cc3c2125946188a1a3eb2a9d", size = 28498, upload-time = "2026-08-29T18:43:00.536Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d0/bc/21fbf06fe80163e16e7cc29a6b93f1a1e96c8aec3281f35d360ca1bc15c0/converse_sdk-0.11.0-py3-none-any.whl", hash = "sha256:df9e28dc669b788ed16adb7835bc978730f1c5163f8fd8c2d33d0de7b4edb437", size = 25674, upload-time = "2026-08-29T18:42:59.755Z" },
 ]
 
 [[package]]
@@ -331,7 +335,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "converse-sdk", git = "https://github.com/Trelis-LTD/voice-loop-pro.git?subdirectory=sdk%2Fpython&rev=7764c1d44ab8f2f37f065137fb2b8bda82d2421d" },
+    { name = "converse-sdk", specifier = ">=0.11.0" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "python-dotenv", specifier = ">=1.0" },
