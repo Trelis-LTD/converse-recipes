@@ -1,11 +1,11 @@
 import asyncio
 
 import numpy as np
+import pytest
 
 from converse_recipes.simulation import (
     SimulationCase,
     SimulationReport,
-    VOICE_TAIL_S,
     _TextTurnRelay,
     _VoiceTurnRelay,
     _close_voice_turn,
@@ -61,7 +61,7 @@ def test_voice_relay_silence_covers_ink_hard_turn_end_fallback():
     destination = Destination()
     destination.calls = []
     asyncio.run(_close_voice_turn(destination))
-    assert sum(len(audio) for audio, _ in destination.calls) == round(16_000 * VOICE_TAIL_S)
+    assert sum(len(audio) for audio, _ in destination.calls) == round(16_000 * _voice_tail_s())
 
 
 def test_voice_tail_treats_empty_timeout_as_broker_default(monkeypatch):
@@ -71,7 +71,27 @@ def test_voice_tail_treats_empty_timeout_as_broker_default(monkeypatch):
         monkeypatch.setenv("CARTESIA_TURN_END_TIMEOUT_MS", value)
         assert _voice_tail_s() == 6.1
     monkeypatch.setenv("CARTESIA_TURN_END_TIMEOUT_MS", "640")
-    assert _voice_tail_s() == 1.1400000000000001
+    assert _voice_tail_s() == pytest.approx(1.14)
+
+
+def test_voice_tail_ignores_malformed_timeout(monkeypatch):
+    for value in ("5600ms", "5.6s", "auto"):
+        monkeypatch.setenv("CARTESIA_TURN_END_TIMEOUT_MS", value)
+        assert _voice_tail_s() == 6.1
+
+
+def test_voice_tail_env_is_read_at_runtime(monkeypatch):
+    """The CLI loads .env after import, so the tail must not be frozen at import time."""
+    monkeypatch.setenv("CARTESIA_TURN_END_TIMEOUT_MS", "100")
+
+    class Destination:
+        async def stream_audio(self, audio, **kwargs):
+            self.calls.append(audio.copy())
+
+    destination = Destination()
+    destination.calls = []
+    asyncio.run(_close_voice_turn(destination))
+    assert sum(len(audio) for audio in destination.calls) == round(16_000 * 0.6)
 
 
 def test_voice_relay_streams_live_and_defers_commit_through_tool_work():

@@ -16,12 +16,16 @@ Fixture = Any | Callable[[dict[str, Any]], Any | Awaitable[Any]]
 
 
 def _voice_tail_s() -> float:
+    # Read lazily (not at import): the CLI only calls load_dotenv() at runtime, and a
+    # malformed value must not take down text-only entry points.
     raw_timeout_ms = os.environ.get("CARTESIA_TURN_END_TIMEOUT_MS", "").strip()
-    timeout_ms = float(raw_timeout_ms) if raw_timeout_ms else 5_600
+    try:
+        timeout_ms = float(raw_timeout_ms) if raw_timeout_ms else 5_600
+    except ValueError:
+        timeout_ms = 5_600
     return max(0.0, timeout_ms / 1_000) + 0.5
 
 
-VOICE_TAIL_S = _voice_tail_s()
 SIMULATION_SILENCE_NUDGE_S = 3_600.0
 SIMULATION_SILENCE_END_S = 7_200.0
 TURN_RELAY_SETTLE_S = 0.15
@@ -78,7 +82,7 @@ async def _close_voice_turn(
     """Advance the virtual mic until Ink commits, bounded by its hard fallback."""
     committed = committed or asyncio.Event()
     stopped = stopped or asyncio.Event()
-    remaining = round(16_000 * VOICE_TAIL_S)
+    remaining = round(16_000 * _voice_tail_s())
     while remaining > 0 and not committed.is_set() and not stopped.is_set():
         samples = min(1_600, remaining)
         await destination.stream_audio(
@@ -419,6 +423,7 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
             await asyncio.wait_for(stop.wait(), timeout=case.timeout_s)
         except TimeoutError:
             report.termination_reason = "timeout"
+            stop.set()
     finally:
         for task in tasks:
             task.cancel()
