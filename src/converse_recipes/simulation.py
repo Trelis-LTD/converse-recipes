@@ -2,170 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import os
 import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 import httpx
-import numpy as np
 from converse_sdk import ConverseMode, ConverseSession
+from converse_sdk.relay import (
+    SIMULATION_SILENCE_END_S,
+    SIMULATION_SILENCE_NUDGE_S,
+    TextTurnRelay,
+    VoiceTurnRelay,
+)
 
 Fixture = Any | Callable[[dict[str, Any]], Any | Awaitable[Any]]
-
-
-def _voice_tail_s() -> float:
-    # Read lazily (not at import): the CLI only calls load_dotenv() at runtime, and a
-    # malformed value must not take down text-only entry points.
-    raw_timeout_ms = os.environ.get("CARTESIA_TURN_END_TIMEOUT_MS", "").strip()
-    try:
-        timeout_ms = float(raw_timeout_ms) if raw_timeout_ms else 5_600
-    except ValueError:
-        timeout_ms = 5_600
-    return max(0.0, timeout_ms / 1_000) + 0.5
-
-
-SIMULATION_SILENCE_NUDGE_S = 3_600.0
-SIMULATION_SILENCE_END_S = 7_200.0
-TURN_RELAY_SETTLE_S = 0.15
-
-
-class _TextTurnRelay:
-    """Forward committed text only after any tool work behind that turn has settled."""
-
-    def __init__(self, forward: Callable[[str], Awaitable[None]], *,
-                 settle_s: float = TURN_RELAY_SETTLE_S, on_error=None):
-        self._forward = forward
-        self._settle_s = settle_s
-        self._on_error = on_error
-        self._idle = asyncio.Event()
-        self._idle.set()
-        self._pending: str | None = None
-        self._tasks: set[asyncio.Task] = set()
-
-    def utterance(self, text: str) -> None:
-        self._pending = text
-
-    def working(self, active: bool) -> None:
-        self._idle.clear() if active else self._idle.set()
-
-    def done(self) -> None:
-        if self._pending is None:
-            return
-        task = asyncio.create_task(self._flush())
-        self._tasks.add(task)
-        task.add_done_callback(self._task_done)
-
-    def _task_done(self, task: asyncio.Task) -> None:
-        self._tasks.discard(task)
-        if not task.cancelled() and (error := task.exception()) is not None and self._on_error:
-            self._on_error(error)
-
-    async def _flush(self) -> None:
-        await asyncio.sleep(self._settle_s)
-        await self._idle.wait()
-        text, self._pending = self._pending, None
-        if text:
-            await self._forward(text)
-
-    async def close(self) -> None:
-        for task in list(self._tasks):
-            task.cancel()
-        if self._tasks:
-            await asyncio.gather(*self._tasks, return_exceptions=True)
-
-
-async def _close_voice_turn(
-        destination: ConverseSession, committed: asyncio.Event | None = None,
-        stopped: asyncio.Event | None = None) -> None:
-    """Advance the virtual mic until Ink commits, bounded by its hard fallback."""
-    committed = committed or asyncio.Event()
-    stopped = stopped or asyncio.Event()
-    remaining = round(16_000 * _voice_tail_s())
-    while remaining > 0 and not committed.is_set() and not stopped.is_set():
-        samples = min(1_600, remaining)
-        await destination.stream_audio(
-            np.zeros(samples, dtype=np.float32),
-            sr=16_000,
-            chunk_ms=100,
-            realtime=True,
-        )
-        remaining -= samples
-
-
-class _VoiceTurnRelay:
-    """Cross-pipe SDK audio live, then close the receiving turn after tool work settles."""
-
-    def __init__(self, destination: ConverseSession, *,
-                 settle_s: float = TURN_RELAY_SETTLE_S, on_error=None):
-        self._destination = destination
-        self._settle_s = settle_s
-        self._on_error = on_error
-        self._idle = asyncio.Event()
-        self._idle.set()
-        self._committed = asyncio.Event()
-        self._tail_stop = asyncio.Event()
-        self._receiving = False
-        self._finish_task: asyncio.Task | None = None
-        self._tasks: set[asyncio.Task] = set()
-
-    async def _stop_finish(self) -> None:
-        task = self._finish_task
-        if task is not None and not task.done():
-            self._tail_stop.set()
-            await asyncio.gather(task, return_exceptions=True)
-        self._finish_task = None
-
-    async def audio(self, chunk: np.ndarray) -> None:
-        await self._stop_finish()
-        if not self._receiving:
-            self._receiving = True
-            self._committed.clear()
-        await self._destination.send_audio(np.asarray(chunk, dtype=np.float32))
-
-    def working(self, active: bool) -> None:
-        self._idle.clear() if active else self._idle.set()
-
-    def done(self) -> None:
-        if not self._receiving:
-            return
-        self._receiving = False
-        self._tail_stop = asyncio.Event()
-        task = asyncio.create_task(self._flush())
-        self._finish_task = task
-        self._tasks.add(task)
-        task.add_done_callback(self._task_done)
-
-    def _task_done(self, task: asyncio.Task) -> None:
-        self._tasks.discard(task)
-        if not task.cancelled() and (error := task.exception()) is not None and self._on_error:
-            self._on_error(error)
-
-    def input_committed(self) -> None:
-        self._committed.set()
-
-    async def _flush(self) -> None:
-        await asyncio.sleep(self._settle_s)
-        idle = asyncio.create_task(self._idle.wait())
-        stopped = asyncio.create_task(self._tail_stop.wait())
-        try:
-            await asyncio.wait({idle, stopped}, return_when=asyncio.FIRST_COMPLETED)
-            if self._tail_stop.is_set():
-                return
-        finally:
-            for waiter in (idle, stopped):
-                if not waiter.done():
-                    waiter.cancel()
-            await asyncio.gather(idle, stopped, return_exceptions=True)
-        await _close_voice_turn(self._destination, self._committed, self._tail_stop)
-
-    async def close(self) -> None:
-        await self._stop_finish()
-        for task in list(self._tasks):
-            task.cancel()
-        if self._tasks:
-            await asyncio.gather(*self._tasks, return_exceptions=True)
 
 
 @dataclass(frozen=True)
@@ -321,14 +172,14 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
         stop.set()
 
     relays = {
-        "target": _TextTurnRelay(
+        "target": TextTurnRelay(
             lambda text: forward_text(simulator, text), on_error=relay_failed),
-        "simulator": _TextTurnRelay(
+        "simulator": TextTurnRelay(
             lambda text: forward_text(target, text), on_error=relay_failed),
     }
     voice_relays = {
-        "target": _VoiceTurnRelay(simulator, on_error=relay_failed),
-        "simulator": _VoiceTurnRelay(target, on_error=relay_failed),
+        "target": VoiceTurnRelay(simulator, on_error=relay_failed),
+        "simulator": VoiceTurnRelay(target, on_error=relay_failed),
     }
 
     async def consume(side: str, source: ConverseSession,
