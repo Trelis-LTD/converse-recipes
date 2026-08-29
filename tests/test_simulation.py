@@ -5,9 +5,11 @@ import numpy as np
 from converse_recipes.simulation import (
     SimulationCase,
     SimulationReport,
+    VOICE_TAIL_S,
     _TextTurnRelay,
     _VoiceTurnRelay,
     _close_voice_turn,
+    _voice_tail_s,
     _fixture_result,
     evaluate_expectations,
 )
@@ -35,46 +37,161 @@ def test_text_relay_waits_for_tool_work_to_settle():
     assert asyncio.run(run()) == ["I'll check that now"]
 
 
-def test_voice_relay_keeps_blackholed_silence_running_through_endpoint_commit():
+def test_voice_relay_silence_stops_when_receiving_turn_commits():
     class Destination:
         async def stream_audio(self, audio, **kwargs):
-            self.audio = audio
-            self.kwargs = kwargs
+            self.calls.append((audio.copy(), kwargs))
+            if len(self.calls) == 3:
+                committed.set()
+
+    committed = asyncio.Event()
+    destination = Destination()
+    destination.calls = []
+    asyncio.run(_close_voice_turn(destination, committed))
+    assert [len(audio) for audio, _ in destination.calls] == [1_600, 1_600, 1_600]
+    assert all(kwargs == {"sr": 16_000, "chunk_ms": 100, "realtime": True}
+               for _, kwargs in destination.calls)
+
+
+def test_voice_relay_silence_covers_ink_hard_turn_end_fallback():
+    class Destination:
+        async def stream_audio(self, audio, **kwargs):
+            self.calls.append((audio.copy(), kwargs))
 
     destination = Destination()
+    destination.calls = []
     asyncio.run(_close_voice_turn(destination))
-    assert len(destination.audio) == 32_000
-    assert destination.kwargs == {"sr": 16_000, "chunk_ms": 100, "realtime": True}
+    assert sum(len(audio) for audio, _ in destination.calls) == round(16_000 * VOICE_TAIL_S)
 
 
-def test_voice_relay_waits_for_client_tool_continuation_before_crosspipe():
+def test_voice_tail_treats_empty_timeout_as_broker_default(monkeypatch):
+    monkeypatch.delenv("CARTESIA_TURN_END_TIMEOUT_MS", raising=False)
+    assert _voice_tail_s() == 6.1
+    for value in ("", "   "):
+        monkeypatch.setenv("CARTESIA_TURN_END_TIMEOUT_MS", value)
+        assert _voice_tail_s() == 6.1
+    monkeypatch.setenv("CARTESIA_TURN_END_TIMEOUT_MS", "640")
+    assert _voice_tail_s() == 1.1400000000000001
+
+
+def test_voice_relay_streams_live_and_defers_commit_through_tool_work():
     async def run():
         class Destination:
             def __init__(self):
                 self.calls = []
 
+            async def send_audio(self, audio):
+                self.calls.append(("audio", audio.copy()))
+
             async def stream_audio(self, audio, **kwargs):
-                self.calls.append((audio.copy(), kwargs))
+                self.calls.append(("tail", audio.copy()))
+                relay.input_committed()
 
         destination = Destination()
         relay = _VoiceTurnRelay(destination, settle_s=0)
-        relay.audio(np.ones(800, dtype=np.float32))
+        await relay.audio(np.ones(800, dtype=np.float32))
         relay.done()
+        await asyncio.sleep(0)
         relay.working(True)
         await asyncio.sleep(0)
-        assert destination.calls == []
-        relay.audio(np.full(400, 2.0, dtype=np.float32))
+        assert [(kind, len(audio)) for kind, audio in destination.calls] == [("audio", 800)]
+
+        await relay.audio(np.full(400, 2.0, dtype=np.float32))
+        relay.done()
         relay.working(False)
-        await asyncio.sleep(0)
-        await asyncio.sleep(0)
-        await asyncio.sleep(0)
+        assert relay._finish_task is not None
+        await asyncio.wait_for(relay._finish_task, 1)
         await relay.close()
         return destination.calls
 
     calls = asyncio.run(run())
-    assert [len(audio) for audio, _ in calls] == [1_200, 32_000]
-    assert np.all(calls[0][0][:800] == 1.0)
-    assert np.all(calls[0][0][800:] == 2.0)
+    assert [(kind, len(audio)) for kind, audio in calls] == [
+        ("audio", 800), ("audio", 400), ("tail", 1_600),
+    ]
+    assert np.all(calls[0][1] == 1.0)
+    assert np.all(calls[1][1] == 2.0)
+
+
+def test_voice_relay_serializes_tail_stop_before_continuation_audio():
+    async def run():
+        class Destination:
+            def __init__(self):
+                self.calls = []
+                self.writing = False
+                self.tail_started = asyncio.Event()
+                self.release_tail = asyncio.Event()
+
+            async def send_audio(self, audio):
+                assert not self.writing
+                self.writing = True
+                self.calls.append(("audio", audio.copy()))
+                self.writing = False
+
+            async def stream_audio(self, audio, **_kwargs):
+                assert not self.writing
+                self.writing = True
+                self.tail_started.set()
+                await self.release_tail.wait()
+                self.calls.append(("tail", audio.copy()))
+                self.writing = False
+
+        destination = Destination()
+        relay = _VoiceTurnRelay(destination, settle_s=0)
+        await relay.audio(np.ones(800, dtype=np.float32))
+        relay.done()
+        await asyncio.wait_for(destination.tail_started.wait(), 1)
+
+        continuation = asyncio.create_task(
+            relay.audio(np.full(400, 2.0, dtype=np.float32)))
+        await asyncio.sleep(0)
+        assert not continuation.done()
+        destination.release_tail.set()
+        await continuation
+        await relay.close()
+        return destination.calls
+
+    calls = asyncio.run(run())
+    assert [(kind, len(audio)) for kind, audio in calls] == [
+        ("audio", 800), ("tail", 1_600), ("audio", 400),
+    ]
+
+
+def test_relay_background_failures_surface_immediately():
+    async def run():
+        errors = []
+
+        async def fail_text(_text):
+            raise RuntimeError("text relay failed")
+
+        text_relay = _TextTurnRelay(fail_text, settle_s=0, on_error=errors.append)
+        text_relay.utterance("hello")
+        text_relay.done()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+        class Destination:
+            async def send_audio(self, _audio):
+                pass
+
+            async def stream_audio(self, _audio, **_kwargs):
+                raise RuntimeError("voice relay failed")
+
+        voice_relay = _VoiceTurnRelay(Destination(), settle_s=0, on_error=errors.append)
+        await voice_relay.audio(np.ones(800, dtype=np.float32))
+        voice_relay.done()
+        assert voice_relay._finish_task is not None
+        failures = await asyncio.gather(
+            voice_relay._finish_task, return_exceptions=True)
+        await asyncio.sleep(0)
+
+        assert [str(error) for error in errors] == [
+            "text relay failed", "voice relay failed",
+        ]
+        assert [str(error) for error in failures] == ["voice relay failed"]
+        await text_relay.close()
+        await voice_relay.close()
+
+    asyncio.run(run())
 
 
 def test_fixed_and_callback_fixtures_share_the_tool_result_contract():

@@ -5,7 +5,7 @@ const answers = {};
 const fields = document.querySelector('#fields');
 const transcript = document.querySelector('#transcript');
 const esc = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-const instructions = `${plan.objective}\nCollect these fields naturally and call record_plan_field whenever one is supported or corrected. Do not read the list aloud and do not finish before every required field is recorded.\n${plan.fields.map(field => `- ${field.key}: ${field.description}`).join('\n')}\nWhen complete: ${plan.completion}`;
+const instructions = `${plan.objective}\nCollect these fields naturally and call record_plan_field whenever one is supported or corrected. Do not read the list aloud and do not finish before every required field is recorded.\n${plan.fields.map(field => `- ${field.key} (${field.required === false ? 'optional' : 'required'}): ${field.description}`).join('\n')}\nWhen complete: ${plan.completion}`;
 const tool = {name:'record_plan_field',description:'Record or correct supported interview evidence.',parameters:{type:'object',properties:{field:{type:'string',enum:plan.fields.map(field=>field.key)},value:{type:'string'}},required:['field','value']},expected_duration:'instant',status_label:'interview notes'};
 let client;
 
@@ -25,7 +25,7 @@ document.querySelector('#start').onclick = async () => {
     const {id,name,args} = event.detail;
     if(name !== 'record_plan_field') return;
     answers[args.field] = args.value; render();
-    const missing = plan.fields.filter(field => field.required && !answers[field.key]).map(field => field.key);
+    const missing = plan.fields.filter(field => field.required !== false && !answers[field.key]).map(field => field.key);
     client.sendToolResult(id,{recorded:args.field,missing_required:missing,complete:missing.length===0},{outcome:'succeeded',verified:true});
   });
   if(modality === 'voice') await client.unlockAudio();
