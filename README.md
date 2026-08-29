@@ -41,9 +41,9 @@ a persistent `ck_` key).
 
 [`examples/simulations/appointment_booking.json`](examples/simulations/appointment_booking.json)
 runs a support agent against a Converse simulated caller. The target may use fixed fixtures; the
-simulator receives no tools. Text forwards committed utterances. Voice buffers complete turns,
-cross-pipes their 16 kHz PCM in memory, and sends it to no speaker, sound device or file output—a
-blackholed acoustic test.
+simulator receives no tools. Text forwards committed utterances. Voice cross-pipes each live 16 kHz
+PCM chunk once through the same `ConverseSession.send_audio()` mic input used by an ordinary SDK
+client. It sends audio to no speaker, sound device, or file output: a blackholed acoustic test.
 The example deterministically checks the committed target transcript and target tool calls, so the
 same case produces an explicit report instead of relying on a model to grade itself.
 It stops cleanly when every declared expectation is satisfied at a committed target turn; guard
