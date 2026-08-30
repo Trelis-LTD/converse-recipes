@@ -26,14 +26,20 @@ def test_case_uses_the_hosted_document_shape():
 
     with pytest.raises(ValueError, match="target.instructions"):
         SimulationCase.from_dict({"name": "old", "starter": "hi", "target_instructions": "x"})
-    with pytest.raises(ValueError, match="unsupported check"):
-        SimulationCase.from_dict({"name": "bad", "starter": "hi", "checks": [{"type": "vibes"}]})
+    with pytest.raises(ValueError, match="unsupported check type"):
+        SimulationCase.from_dict({"name": "bad", "starter": "hi", "checks": [{"type": "vibes", "value": 1}]})
+    with pytest.raises(ValueError, match="needs a value or criterion"):
+        SimulationCase.from_dict({"name": "bad", "starter": "hi", "checks": [{"type": "contains"}]})
+    with pytest.raises(ValueError, match="starter must contain"):
+        SimulationCase.from_dict({"name": "no starter"})
 
 
 def test_checks_match_the_hosted_runner_and_skip_judges():
     case = SimulationCase.from_dict({
         "name": "booking", "starter": "Hello",
-        "target": {"instructions": "Book safely.", "tools": [{"name": "lookup"}]},
+        "target": {"instructions": "Book safely.", "tools": [
+            {"name": "lookup"},
+            {"name": "intake", "parameters": {"type": "object", "properties": {"field": {}, "value": {}}}}]},
         "simulator": {"instructions": "Want a slot."},
         "fixtures": {"intake": {"fixture_type": "field_store", "field_arg": "field",
                                 "value_arg": "value", "fields": [{"key": "name"}, {"key": "phone"}]}},
@@ -53,7 +59,7 @@ def test_checks_match_the_hosted_runner_and_skip_judges():
                     {"role": "assistant", "text": "3:30 is available; confirmation PT-1."}],
         events=[{"side": "target", "type": "tool_call", "name": "lookup"}],
         fixture_state={"intake": {"name": "Maya"}},
-        termination_reason="expectations_met",
+        termination_reason="completed",
     )
     results = evaluate_checks(case, report)
     assert [(r["name"], r["pass"]) for r in results] == [
@@ -103,6 +109,9 @@ def test_collect_cases_reads_files_and_directories(tmp_path):
     (tmp_path / "c.json").write_text(json.dumps({"name": "c", "target_instructions": "old"}))
     with pytest.raises(SystemExit, match="target.instructions"):
         collect_cases([tmp_path])
+    (tmp_path / "c.json").write_text(json.dumps({"name": "c"}))
+    with pytest.raises(SystemExit, match="starter must contain"):
+        collect_cases([tmp_path])
 
 
 def test_push_upserts_then_starts_one_run(tmp_path):
@@ -131,6 +140,11 @@ def test_push_upserts_then_starts_one_run(tmp_path):
             ]}
 
     lines, client = [], FakeClient()
+    (tmp_path / "z.json").write_text(json.dumps({"name": "z", "starter": "hi", "checks": [{"type": "contains"}]}))
+    with pytest.raises(ValueError, match="z: each check needs"):
+        push(client, [tmp_path], modality="text", repetitions=1, wait=False, out=lines.append)
+    assert client.calls == []                                   # nothing upserted on a bad file
+    (tmp_path / "z.json").unlink()
     run = push(client, [tmp_path], modality="voice", repetitions=2, wait=True, out=lines.append)
     assert client.calls == [("upsert", ["a", "b"]), ("run", ["id-a", "id-b"], "voice", 2)]
     assert run["status"] == "passed"

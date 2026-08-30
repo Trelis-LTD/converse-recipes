@@ -39,16 +39,16 @@ wheels = [
 
 [[package]]
 name = "converse-sdk"
-version = "0.13.0"
+version = "0.13.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e8/23/41ac8ced140447e0f6f63a9948755ed4f32f598c6b26acf0003752eb21a0/converse_sdk-0.13.0.tar.gz", hash = "sha256:bbcea05acb83e816462dd99b9c94fe519a190595adc92d6e83fddff6d97131c0", size = 36262, upload-time = "2026-08-30T08:25:34.482Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/aa/ae/9bd8b97a7613ff3c8d81606def5774ebd33fa11ff4006d7136209122eb1e/converse_sdk-0.13.1.tar.gz", hash = "sha256:a0ee4be69eac3d6057787af5396eac96bd64c3b46a82029662c0c7853b3f2ba5", size = 38125, upload-time = "2026-08-30T09:04:28.376Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/60/4beec0617c985445ff5edbd3a9ede72518933420543baaa32c9bf9c5d1c5/converse_sdk-0.13.0-py3-none-any.whl", hash = "sha256:9205d003c097125cfcad509eb2f0879c78073b42d1d2f6611dd2dabf9f1f7adc", size = 31460, upload-time = "2026-08-30T08:25:33.464Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/ea/4411164e11fd5081df537bed7b3771479d7ceb92cf05e146d0d53a9f602c/converse_sdk-0.13.1-py3-none-any.whl", hash = "sha256:4255912f64df625706f2f1562911a9e856d02c550d818fc810ba723990e44745", size = 32983, upload-time = "2026-08-30T09:04:27.353Z" },
 ]
 
 [[package]]
@@ -335,7 +335,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "converse-sdk", specifier = ">=0.13.0" },
+    { name = "converse-sdk", specifier = ">=0.13.1" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "python-dotenv", specifier = ">=1.0" },

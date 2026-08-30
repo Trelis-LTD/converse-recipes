@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 
-from converse_sdk.evals import EvalsClient, EvalsError, load_cases
+from converse_sdk.evals import EvalsClient, EvalsError, load_cases, validate_case
 from dotenv import load_dotenv
 
 from .conversation_plan import ConversationPlan
@@ -71,7 +71,7 @@ def collect_cases(paths: list[Path]) -> list[SimulationCase]:
         for document in load_cases(path):
             try:
                 cases.append(SimulationCase.from_dict(document))
-            except (KeyError, ValueError) as exc:
+            except ValueError as exc:
                 raise SystemExit(f"{path}: {exc}") from None
     return cases
 
@@ -100,10 +100,13 @@ async def _simulation(args) -> None:
         report = await run_simulation(url, api_key, case, modality=args.modality)
         print(json.dumps(_summary(report), indent=2))
         if all(report_args):
-            await report_attempt(
-                args.report_base_url, api_key, args.run_id, args.case_id, report,
-                repetition=args.repetition,
-            )
+            try:
+                await report_attempt(
+                    args.report_base_url, api_key, args.run_id, args.case_id, report,
+                    repetition=args.repetition,
+                )
+            except EvalsError as exc:
+                raise SystemExit(f"report rejected: {exc}") from None
         failed += not report.passed
     if len(cases) > 1:
         print(f"{len(cases) - failed} of {len(cases)} cases passed")
@@ -127,9 +130,13 @@ def simulation_main() -> None:
 def push(client: EvalsClient, paths: list[Path], *, modality: str, repetitions: int,
          wait: bool, out=print) -> dict:
     """Upsert every case, start one hosted run over them, print the dashboard link."""
-    documents = [document for path in paths for document in load_cases(path)]
-    for document in documents:
-        SimulationCase.from_dict(document)          # same validation as a local run
+    documents = []
+    for path in paths:
+        for document in load_cases(path):
+            try:
+                documents.append(validate_case(document))   # every file, before any upsert
+            except ValueError as exc:
+                raise ValueError(f"{path}: {document.get('name', '?')}: {exc}") from None
     cases = client.upsert_cases(documents)
     out(f"{len(cases)} case{'s' if len(cases) != 1 else ''} pushed: "
         + ", ".join(case["name"] for case in cases))
@@ -160,7 +167,7 @@ def evals_main() -> None:
     try:
         run = push(client, args.paths, modality=args.modality, repetitions=args.repetitions,
                    wait=args.wait)
-    except (EvalsError, ValueError) as exc:
+    except (EvalsError, ValueError, TimeoutError) as exc:
         raise SystemExit(str(exc)) from None
     if args.wait and run.get("status") != "passed":
         raise SystemExit(1)

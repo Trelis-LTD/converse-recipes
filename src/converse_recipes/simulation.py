@@ -10,6 +10,7 @@ from typing import Any, Awaitable, Callable
 
 import httpx
 from converse_sdk import ConverseMode, ConverseSession
+from converse_sdk.evals import EvalsError, validate_case
 from converse_sdk.relay import (
     SIMULATION_SILENCE_END_S,
     SIMULATION_SILENCE_NUDGE_S,
@@ -20,9 +21,6 @@ from converse_sdk.relay import (
 Fixture = Any | Callable[[dict[str, Any]], Any | Awaitable[Any]]
 
 # The same case document the hosted evals API accepts: run it here, push it unchanged.
-CHECK_TYPES = frozenset({
-    "contains", "not_contains", "regex", "tool_called", "fixture_complete", "max_turns", "judge",
-})
 LEGACY_KEYS = ("target_instructions", "simulator_instructions", "target_tools", "expected")
 MAX_FIXTURE_FIELD_VALUE_CHARS = 20_000
 
@@ -54,13 +52,11 @@ class SimulationCase:
             raise ValueError(
                 f"{', '.join(stale)}: cases use the hosted shape (target.instructions, "
                 "target.tools, simulator.instructions, checks, limits); see the evals guide")
+        value = validate_case(value)                # the hosted rules, the hosted messages
         target = value.get("target") or {}
         simulator = value.get("simulator") or {}
-        limits = value.get("limits") or {}
-        checks = tuple(value.get("checks") or ())
-        for check in checks:
-            if not isinstance(check, dict) or check.get("type") not in CHECK_TYPES:
-                raise ValueError(f"unsupported check: {check!r}")
+        limits = value["limits"]
+        checks = tuple(value["checks"])
         return cls(
             name=str(value["name"]),
             starter=str(value["starter"]),
@@ -70,9 +66,9 @@ class SimulationCase:
             target_options={key: target[key] for key in ("voice", "web_search") if key in target},
             fixtures=dict(value.get("fixtures") or {}),
             checks=checks,
-            max_turns=int(limits.get("max_turns", 20)),
-            timeout_s=float(limits.get("timeout_s", 600)),
-            silence_s=float(limits.get("silence_s", 30)),
+            max_turns=int(limits["max_turns"]),
+            timeout_s=float(limits["timeout_s"]),
+            silence_s=float(limits["silence_s"]),
         )
 
 
@@ -99,7 +95,7 @@ class SimulationReport:
         hosted (they need the judge model); they are reported as skipped, not as failures."""
         return (
             not self.error
-            and self.termination_reason in {"completed", "expectations_met", "max_turns"}
+            and self.termination_reason in {"completed", "max_turns"}
             and all(result["pass"] for result in self.check_results if not result.get("skipped"))
         )
 
@@ -234,7 +230,6 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
     last_activity = {"at": time.monotonic()}
     target_turns = {"count": 0}
     repetition = {"text": "", "count": 0}
-    deterministic = [check for check in case.checks if check.get("type") != "judge"]
 
     async def forward_text(destination: ConverseSession, text: str) -> None:
         normalized = " ".join(text.casefold().split())
@@ -305,13 +300,6 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
                 elif event.type == "audio" and modality == "voice" and event.audio is not None:
                     await voice_relays[side].audio(event.audio)
                 elif event.type == "done":
-                    if side == "target" and deterministic:
-                        interim = evaluate_checks(case, report)
-                        if all(check["pass"] for check in interim if not check.get("skipped")):
-                            report.check_results = interim
-                            report.termination_reason = "expectations_met"
-                            stop.set()
-                            continue
                     if modality == "text":
                         relays[side].done()
                     else:
@@ -395,6 +383,8 @@ async def report_attempt(base_url: str, api_key: str, run_id: str, case_id: str,
         "simulator_session_id": report.simulator_session_id,
         "transcript": report.transcript, "events": report.events,
         "check_results": [r for r in report.check_results if not r.get("skipped")],
+        # A judge the local run could not evaluate stays visible on the run page as Skipped.
+        "judge_results": [r for r in report.check_results if r.get("skipped")],
         "termination_reason": report.termination_reason, "error": report.error,
     }
     async with httpx.AsyncClient(timeout=30) as client:
@@ -402,5 +392,10 @@ async def report_attempt(base_url: str, api_key: str, run_id: str, case_id: str,
             f"{base_url.rstrip('/')}/api/app/evals/runs/{run_id}/report",
             headers={"Authorization": f"Bearer {api_key}"}, json=payload,
         )
-        response.raise_for_status()
+        if response.is_error:
+            try:
+                detail = response.json().get("error") or response.json().get("detail")
+            except ValueError:
+                detail = response.text[:500]
+            raise EvalsError(response.status_code, str(detail or "report rejected"))
         return response.json()
