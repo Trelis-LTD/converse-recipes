@@ -1,33 +1,37 @@
 {
   "name": "physiotherapy appointment with constraints and permission",
-  "target_instructions": "You schedule physiotherapy appointments. Discover the caller's constraint, use check_availability before proposing a slot, clearly summarize the exact slot and price, and use book_appointment only after the caller explicitly approves that exact booking. The booking tool is permission-gated: if it remains pending after the caller first agrees, clearly ask them to confirm the exact slot once more. Never say a booking is complete or that the caller is all set until the tool result confirms it, and always give them the confirmation code.",
-  "simulator_instructions": "You are Maya, a caller arranging physiotherapy for shoulder pain. Stay in the caller role. Never speak for the clinic, narrate tools, invent results or confirmation codes, use stage directions, or quote the assistant. Reveal facts naturally across the conversation. When asked about availability, say you want next Tuesday and cannot attend before 2pm. Do not approve a slot until both constraints have been stated. You also care about price. When offered next Tuesday at 3:30pm for €85, ask whether €85 is the final price. After the assistant answers, explicitly approve that exact day, time, and price. If asked to confirm permission again, repeat the same direct approval without stalling. Do not claim success or end until the assistant provides an actual confirmation code. Then say aloud that there is nothing else, thank them, say goodbye, and end the conversation.",
   "starter": "Hi, I need to arrange a physiotherapy appointment for my shoulder.",
-  "max_turns": 10,
-  "timeout_s": 240,
-  "silence_s": 35,
-  "target_tools": [
-    {
-      "name": "check_availability",
-      "description": "Find physiotherapy slots matching the caller's stated constraints.",
-      "parameters": {"type":"object","properties":{"day":{"type":"string"},"after_time":{"type":"string"}},"required":["day"]},
-      "read_only": true,
-      "expected_duration": "instant"
-    },
-    {
-      "name": "book_appointment",
-      "description": "Book one exact offered slot after the caller approves it.",
-      "parameters": {"type":"object","properties":{"slot_id":{"type":"string"}},"required":["slot_id"]},
-      "requires_permission": true,
-      "expected_duration": "instant"
-    }
-  ],
-  "fixtures": {
-    "check_availability": {"result":{"slots":[{"slot_id":"tue-1530","day":"next Tuesday","time":"3:30pm","price":"€85"}]}},
-    "book_appointment": {"result":{"booked":true,"confirmation":"PT-2048","day":"next Tuesday","time":"3:30pm","price":"€85"}}
+  "target": {
+    "instructions": "You schedule physiotherapy appointments. Discover the caller's constraint, use check_availability before proposing a slot, clearly summarize the exact slot and price, and use book_appointment only after the caller explicitly approves that exact booking. The booking tool is permission-gated: if it remains pending after the caller first agrees, clearly ask them to confirm the exact slot once more. Never say a booking is complete or that the caller is all set until the tool result confirms it, and always give them the confirmation code.",
+    "tools": [
+      {
+        "name": "check_availability",
+        "description": "Find physiotherapy slots matching the caller's stated constraints.",
+        "parameters": {"type": "object", "properties": {"day": {"type": "string"}, "after_time": {"type": "string"}}, "required": ["day"]},
+        "read_only": true,
+        "expected_duration": "instant"
+      },
+      {
+        "name": "book_appointment",
+        "description": "Book one exact offered slot after the caller approves it.",
+        "parameters": {"type": "object", "properties": {"slot_id": {"type": "string"}}, "required": ["slot_id"]},
+        "requires_permission": true,
+        "expected_duration": "instant"
+      }
+    ]
   },
-  "expected": {
-    "assistant_contains": ["confirmation code"],
-    "tools_called": ["check_availability", "book_appointment"]
-  }
+  "simulator": {
+    "instructions": "You are Maya, a caller arranging physiotherapy for shoulder pain. Stay in the caller role. Never speak for the clinic, narrate tools, invent results or confirmation codes, use stage directions, or quote the assistant. Reveal facts naturally across the conversation. When asked about availability, say you want next Tuesday and cannot attend before 2pm. Do not approve a slot until both constraints have been stated. You also care about price. When offered next Tuesday at 3:30pm for €85, ask whether €85 is the final price. After the assistant answers, explicitly approve that exact day, time, and price. If asked to confirm permission again, repeat the same direct approval without stalling. Do not claim success or end until the assistant provides an actual confirmation code. Then say aloud that there is nothing else, thank them, say goodbye, and end the conversation."
+  },
+  "fixtures": {
+    "check_availability": {"result": {"slots": [{"slot_id": "tue-1530", "day": "next Tuesday", "time": "3:30pm", "price": "€85"}]}},
+    "book_appointment": {"result": {"booked": true, "confirmation": "PT-2048", "day": "next Tuesday", "time": "3:30pm", "price": "€85"}}
+  },
+  "checks": [
+    {"type": "tool_called", "value": "check_availability"},
+    {"type": "tool_called", "value": "book_appointment"},
+    {"type": "contains", "value": "PT-2048", "name": "the confirmation code from book_appointment reaches the caller"},
+    {"type": "judge", "criterion": "The assistant stated the exact slot and price before booking and gave the confirmation code only after the booking tool confirmed it."}
+  ],
+  "limits": {"max_turns": 10, "timeout_s": 240, "silence_s": 35}
 }

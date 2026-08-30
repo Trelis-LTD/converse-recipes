@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -18,36 +19,60 @@ from converse_sdk.relay import (
 
 Fixture = Any | Callable[[dict[str, Any]], Any | Awaitable[Any]]
 
+# The same case document the hosted evals API accepts: run it here, push it unchanged.
+CHECK_TYPES = frozenset({
+    "contains", "not_contains", "regex", "tool_called", "fixture_complete", "max_turns", "judge",
+})
+LEGACY_KEYS = ("target_instructions", "simulator_instructions", "target_tools", "expected")
+MAX_FIXTURE_FIELD_VALUE_CHARS = 20_000
+
 
 @dataclass(frozen=True)
 class SimulationCase:
     name: str
+    starter: str
     target_instructions: str
     simulator_instructions: str
-    starter: str
     target_tools: tuple[dict[str, Any], ...] = ()
+    target_options: dict[str, Any] = field(default_factory=dict)   # voice, web_search
     fixtures: dict[str, Fixture] = field(default_factory=dict)
-    expected: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    max_turns: int = 8
-    timeout_s: float = 180.0
+    checks: tuple[dict[str, Any], ...] = ()
+    max_turns: int = 20
+    timeout_s: float = 600.0
     silence_s: float = 30.0
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "SimulationCase":
+        """Build a case from the hosted case document.
+
+        ``name``, ``starter``, ``target`` (``instructions``, optional ``tools``, ``voice``,
+        ``web_search``), ``simulator`` (``instructions``), ``fixtures``, ``checks`` and
+        ``limits`` (``max_turns``, ``timeout_s``, ``silence_s``).
+        """
+        stale = [key for key in LEGACY_KEYS if key in value]
+        if stale:
+            raise ValueError(
+                f"{', '.join(stale)}: cases use the hosted shape (target.instructions, "
+                "target.tools, simulator.instructions, checks, limits); see the evals guide")
+        target = value.get("target") or {}
+        simulator = value.get("simulator") or {}
+        limits = value.get("limits") or {}
+        checks = tuple(value.get("checks") or ())
+        for check in checks:
+            if not isinstance(check, dict) or check.get("type") not in CHECK_TYPES:
+                raise ValueError(f"unsupported check: {check!r}")
         return cls(
             name=str(value["name"]),
-            target_instructions=str(value["target_instructions"]),
-            simulator_instructions=str(value["simulator_instructions"]),
             starter=str(value["starter"]),
-            target_tools=tuple(value.get("target_tools", [])),
-            fixtures=dict(value.get("fixtures", {})),
-            expected={
-                str(key): tuple(str(item) for item in items)
-                for key, items in value.get("expected", {}).items()
-            },
-            max_turns=int(value.get("max_turns", 8)),
-            timeout_s=float(value.get("timeout_s", 180)),
-            silence_s=float(value.get("silence_s", 30)),
+            target_instructions=str(target.get("instructions") or ""),
+            simulator_instructions=str(simulator.get("instructions") or ""),
+            target_tools=tuple(target.get("tools") or ()),
+            target_options={key: target[key] for key in ("voice", "web_search") if key in target},
+            fixtures=dict(value.get("fixtures") or {}),
+            checks=checks,
+            max_turns=int(limits.get("max_turns", 20)),
+            timeout_s=float(limits.get("timeout_s", 600)),
+            silence_s=float(limits.get("silence_s", 30)),
         )
 
 
@@ -59,6 +84,7 @@ class SimulationReport:
     simulator_session_id: str
     transcript: list[dict[str, str]] = field(default_factory=list)
     events: list[dict[str, Any]] = field(default_factory=list)
+    fixture_state: dict[str, dict[str, str]] = field(default_factory=dict)
     termination_reason: str = "completed"
     error: str = ""
     check_results: list[dict[str, Any]] = field(default_factory=list)
@@ -69,45 +95,100 @@ class SimulationReport:
 
     @property
     def passed(self) -> bool:
+        """No error, a normal end, and every check that ran here passed. Judge checks only run
+        hosted (they need the judge model); they are reported as skipped, not as failures."""
         return (
             not self.error
-            and self.termination_reason in {"expectations_met", "max_turns"}
-            and all(result["pass"] for result in self.check_results)
+            and self.termination_reason in {"completed", "expectations_met", "max_turns"}
+            and all(result["pass"] for result in self.check_results if not result.get("skipped"))
         )
 
 
-def evaluate_expectations(case: SimulationCase,
-                          report: SimulationReport) -> list[dict[str, Any]]:
-    """Evaluate the deliberately small, deterministic recipe check vocabulary."""
+def evaluate_checks(case: SimulationCase, report: SimulationReport) -> list[dict[str, Any]]:
+    """The deterministic checks, with the hosted runner's semantics. Judge checks are skipped."""
     results: list[dict[str, Any]] = []
-    assistant_text = report.assistant_text().casefold()
-    called_tools = {
+    assistant = report.assistant_text()
+    transcript = "\n".join(f"{turn['role']}: {turn['text']}" for turn in report.transcript)
+    called = {
         str(event.get("name"))
         for event in report.events
         if event.get("side") == "target" and event.get("type") == "tool_call"
     }
-    for value in case.expected.get("assistant_contains", ()):
-        results.append({
-            "type": "assistant_contains", "value": value,
-            "pass": value.casefold() in assistant_text,
-        })
-    for value in case.expected.get("tools_called", ()):
-        results.append({
-            "type": "tool_called", "value": value, "pass": value in called_tools,
-        })
+    for index, check in enumerate(case.checks):
+        kind = check.get("type")
+        name = check.get("name") or f"{kind}-{index + 1}"
+        if kind == "judge":
+            results.append({
+                "type": kind, "name": name, "criterion": check.get("criterion"),
+                "pass": None, "skipped": True, "detail": "judge checks run hosted",
+            })
+            continue
+        value = str(check.get("value") or "")
+        passed, detail = False, ""
+        if kind == "contains":
+            passed = value.casefold() in assistant.casefold()
+        elif kind == "not_contains":
+            passed = value.casefold() not in assistant.casefold()
+        elif kind == "regex":
+            try:
+                passed = re.search(value, transcript, re.IGNORECASE) is not None
+            except re.error as exc:
+                detail = f"invalid regex: {exc}"
+        elif kind == "tool_called":
+            passed = value in called
+        elif kind == "fixture_complete":
+            fixture = case.fixtures.get(value, {})
+            stored = report.fixture_state.get(value, {})
+            missing = [
+                item["key"] for item in (fixture.get("fields", []) if isinstance(fixture, dict) else [])
+                if item.get("required", True) and item["key"] not in stored
+            ]
+            passed = (isinstance(fixture, dict) and fixture.get("fixture_type") == "field_store"
+                      and not missing)
+            if missing:
+                detail = f"missing required fields: {', '.join(missing)}"
+        elif kind == "max_turns":
+            passed = sum(turn["role"] == "assistant" for turn in report.transcript) <= int(
+                check.get("value", 20))
+        results.append({"type": kind, "name": name, "value": value, "pass": passed,
+                        "detail": detail})
     return results
 
 
-async def _fixture_result(fixtures: dict[str, Fixture], name: str,
-                          args: dict[str, Any]) -> tuple[Any, str, bool]:
+async def _fixture_result(fixtures: dict[str, Fixture], name: str, args: dict[str, Any],
+                          state: dict[str, dict[str, str]] | None = None) -> tuple[Any, str, bool]:
+    """Answer a target tool call: a Python callable, a field_store, or a fixed value.
+
+    An undeclared tool fails closed, exactly as hosted runs do, so a local pass means the
+    hosted run will not be answering tools the case forgot to declare.
+    """
     if name not in fixtures:
-        return {"error": "unhandled_tool", "tool": name}, "failed", False
+        return ({"error": "unhandled_tool", "tool": name,
+                 "instruction": "The case declares no fixture for this tool; fail closed."},
+                "failed", False)
     value = fixtures[name]
     if callable(value):
         value = value(args)
         if inspect.isawaitable(value):
             value = await value
-    if isinstance(value, dict) and set(value) == {"result"}:
+        return value, "succeeded", True
+    if isinstance(value, dict) and value.get("fixture_type") == "field_store":
+        state = state if state is not None else {}
+        field_arg, value_arg = value["field_arg"], value["value_arg"]
+        key, recorded = args.get(field_arg), args.get(value_arg)
+        known = [item["key"] for item in value["fields"]]
+        if (key not in known or not isinstance(recorded, str) or not recorded.strip()
+                or len(recorded) > MAX_FIXTURE_FIELD_VALUE_CHARS):
+            return ({"error": "invalid_fixture_input", "tool": name,
+                     "instruction": (f"{field_arg} must name a configured field and {value_arg} "
+                                     f"must be 1 to {MAX_FIXTURE_FIELD_VALUE_CHARS} characters of text.")},
+                    "failed", False)
+        stored = state.setdefault(name, {})
+        stored[str(key)] = recorded.strip()
+        missing = [item["key"] for item in value["fields"]
+                   if item.get("required", True) and item["key"] not in stored]
+        return {"recorded": key, "missing_required": missing, "complete": not missing}, "succeeded", True
+    if isinstance(value, dict) and "result" in value:
         value = value["result"]
     return value, "succeeded", True
 
@@ -128,6 +209,8 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
         mode=ConverseMode(
             modality=modality, instructions=case.target_instructions,
             tools=list(case.target_tools) or None, greeting=False,
+            voice=case.target_options.get("voice"),
+            web_search=bool(case.target_options.get("web_search", False)),
             silence_nudge_s=SIMULATION_SILENCE_NUDGE_S if modality == "voice" else None,
             silence_end_s=SIMULATION_SILENCE_END_S if modality == "voice" else None,
         ),
@@ -151,6 +234,7 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
     last_activity = {"at": time.monotonic()}
     target_turns = {"count": 0}
     repetition = {"text": "", "count": 0}
+    deterministic = [check for check in case.checks if check.get("type") != "judge"]
 
     async def forward_text(destination: ConverseSession, text: str) -> None:
         normalized = " ".join(text.casefold().split())
@@ -221,9 +305,9 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
                 elif event.type == "audio" and modality == "voice" and event.audio is not None:
                     await voice_relays[side].audio(event.audio)
                 elif event.type == "done":
-                    if side == "target" and case.expected:
-                        interim = evaluate_expectations(case, report)
-                        if interim and all(check["pass"] for check in interim):
+                    if side == "target" and deterministic:
+                        interim = evaluate_checks(case, report)
+                        if all(check["pass"] for check in interim if not check.get("skipped")):
                             report.check_results = interim
                             report.termination_reason = "expectations_met"
                             stop.set()
@@ -233,14 +317,27 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
                     else:
                         voice_relays[side].done()
                 elif side == "target" and event.type == "tool_call":
+                    call_id = str(event.data.get("id") or "")
+                    tool_name = str(event.data.get("name") or "")
                     value, outcome, verified = await _fixture_result(
-                        case.fixtures, str(event.data.get("name") or ""),
-                        event.data.get("args") or {},
+                        case.fixtures, tool_name, event.data.get("args") or {},
+                        report.fixture_state,
                     )
-                    await source.send_tool_result(
-                        str(event.data.get("id") or ""), value,
-                        outcome=outcome, verified=verified,
-                    )
+                    await source.send_tool_result(call_id, value, outcome=outcome, verified=verified)
+                    fixture = case.fixtures.get(tool_name)
+                    if len(report.events) < 2000:
+                        report.events.append({
+                            "side": "target", "type": "tool_result", "t_ms": event.t_ms,
+                            "id": call_id, "name": tool_name, "outcome": outcome,
+                            "verified": verified,
+                            "fixture": ("unhandled" if fixture is None else "callable"
+                                        if callable(fixture) else fixture.get("fixture_type", "fixed")
+                                        if isinstance(fixture, dict) else "fixed"),
+                        })
+                elif event.type == "session_end_requested":
+                    if not stop.is_set():
+                        report.termination_reason = "completed"
+                        stop.set()
                 elif event.type == "error":
                     report.termination_reason = "connection_error"
                     report.error = str(event.data.get("detail") or event.data.get("code") or "error")
@@ -282,13 +379,14 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
         await asyncio.gather(*(relay.close() for relay in relays.values()))
         await asyncio.gather(*(relay.close() for relay in voice_relays.values()))
         await asyncio.gather(target.close(), simulator.close(), return_exceptions=True)
-    report.check_results = evaluate_expectations(case, report)
+    report.check_results = evaluate_checks(case, report)
     return report
 
 
 async def report_attempt(base_url: str, api_key: str, run_id: str, case_id: str,
                          report: SimulationReport, *, repetition: int = 1,
                          idempotency_key: str | None = None) -> dict[str, Any]:
+    """Post a local result into a hosted run created with execution="local"."""
     status = "passed" if report.passed else "failed"
     payload = {
         "idempotency_key": idempotency_key or f"recipe-{report.target_session_id}",
@@ -296,7 +394,7 @@ async def report_attempt(base_url: str, api_key: str, run_id: str, case_id: str,
         "target_session_id": report.target_session_id,
         "simulator_session_id": report.simulator_session_id,
         "transcript": report.transcript, "events": report.events,
-        "check_results": report.check_results,
+        "check_results": [r for r in report.check_results if not r.get("skipped")],
         "termination_reason": report.termination_reason, "error": report.error,
     }
     async with httpx.AsyncClient(timeout=30) as client:

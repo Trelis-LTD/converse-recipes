@@ -37,30 +37,38 @@ The browser example supports text and voice with the same plan and shows collect
 Serve the repository directory, open the example, and paste a short-lived scoped session key (not
 a persistent `ck_` key).
 
-## Converse-vs-Converse simulation
+## Evals: run cases locally, then push them
 
-[`examples/simulations/appointment_booking.json`](examples/simulations/appointment_booking.json)
-runs a support agent against a Converse simulated caller. The target may use fixed fixtures; the
-simulator receives no tools. Text forwards committed utterances. Voice cross-pipes each live 16 kHz
-PCM chunk once through the same `ConverseSession.send_audio()` mic input used by an ordinary SDK
-client. It sends audio to no speaker, sound device, or file output: a blackholed acoustic test.
-The example deterministically checks the committed target transcript and target tool calls, so the
-same case produces an explicit report instead of relying on a model to grade itself.
-It stops cleanly when every declared expectation is satisfied at a committed target turn; guard
-terminations and missing expectations still fail.
+A case is one JSON file, the same document the hosted evals API accepts: `name`, `starter`,
+`target` (`instructions`, `tools`), `simulator` (`instructions`), `fixtures`, `checks` and
+`limits`. [`examples/simulations/appointment_booking.json`](examples/simulations/appointment_booking.json)
+is a complete one. Field reference: the [evals guide](https://converse.trelis.com/docs/api/evals/).
+
+Run a case, or every case in a directory, locally. Two Converse sessions talk to each other: the
+target agent and a simulated caller. Text forwards committed utterances; voice cross-pipes the
+audio between the sessions and never touches a speaker or microphone.
 
 ```sh
-uv run converse-sim examples/simulations/appointment_booking.json --modality text
+uv run converse-sim examples/simulations/ --modality text
 uv run converse-sim examples/simulations/appointment_booking.json --modality voice
 ```
 
-Use Python callbacks instead of JSON fixture values for local integration tests; see
-[`examples/simulations/with_callbacks.py`](examples/simulations/with_callbacks.py). Hosted evals
-intentionally accept fixed fixtures only and fail closed on any undeclared tool.
+The deterministic checks (`contains`, `not_contains`, `regex`, `tool_called`,
+`fixture_complete`, `max_turns`) run here with the same rules as hosted runs; `judge` checks
+need the judge model and are reported as skipped locally. An undeclared tool fails closed, as it
+does hosted, so a local pass means the case declares every tool the agent uses.
 
-To attach local results to the Converse eval dashboard, create the run with
-`execution: "local"` and pass `--report-base-url`, `--run-id`, and `--case-id`. Reports use an
-idempotency key and the parent run becomes terminal after every attempt reports.
+Push the same files and run them hosted. Cases are matched by name, so a re-push updates the
+hosted case instead of duplicating it; the run appears on the
+[Evals dashboard](https://converse.trelis.com/evals).
+
+```sh
+uv run converse-evals push examples/simulations/ --modality text --wait
+```
+
+To answer tool calls with your own Python instead of fixed fixtures, build the case in code; see
+[`examples/simulations/with_callbacks.py`](examples/simulations/with_callbacks.py). Hosted runs
+accept fixed and `field_store` fixtures only.
 
 ## Tests
 
