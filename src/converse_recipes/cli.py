@@ -64,13 +64,13 @@ def guided_main() -> None:
     asyncio.run(_guided(args.plan))
 
 
-def collect_cases(paths: list[Path]) -> list[SimulationCase]:
+def collect_cases(paths: list[Path], modality: str | None = None) -> list[SimulationCase]:
     """Every case file named, or every *.json case in each directory named."""
     cases = []
     for path in paths:
         for document in load_cases(path):
             try:
-                cases.append(SimulationCase.from_dict(document))
+                cases.append(SimulationCase.from_dict(document, modality=modality))
             except ValueError as exc:
                 raise SystemExit(f"{path}: {exc}") from None
     return cases
@@ -89,7 +89,7 @@ def _summary(report) -> dict:
 
 async def _simulation(args) -> None:
     url, api_key = _credentials()
-    cases = collect_cases(args.paths)
+    cases = collect_cases(args.paths, args.modality)
     report_args = (args.report_base_url, args.run_id, args.case_id)
     if any(report_args) and not all(report_args):
         raise SystemExit("reporting requires --report-base-url, --run-id, and --case-id together")
@@ -134,7 +134,7 @@ def push(client: EvalsClient, paths: list[Path], *, modality: str, repetitions: 
     for path in paths:
         for document in load_cases(path):
             try:
-                documents.append(validate_case(document))   # every file, before any upsert
+                documents.append(validate_case(document, modality=modality))   # every file first
             except ValueError as exc:
                 raise ValueError(f"{path}: {document.get('name', '?')}: {exc}") from None
     cases = client.upsert_cases(documents)

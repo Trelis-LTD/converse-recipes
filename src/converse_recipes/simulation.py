@@ -21,6 +21,32 @@ from converse_sdk.relay import (
 Fixture = Any | Callable[[dict[str, Any]], Any | Awaitable[Any]]
 
 # The same case document the hosted evals API accepts: run it here, push it unchanged.
+# A tool turn can commit as a bridge line and then its final answer; both carry the same turn id
+# root (suffixes -bridge / -final / -degraded / -recovery-final). One conversational turn.
+_TURN_SUFFIX = re.compile(r"-(?:bridge-)?(?:bridge|final|degraded|recovery-final)$")
+
+
+def turn_root(turn_id) -> str | None:
+    if not isinstance(turn_id, str) or not turn_id:
+        return None
+    return _TURN_SUFFIX.sub("", turn_id)
+
+
+def assistant_turns(transcript: list[dict]) -> int:
+    """Conversational assistant turns: entries sharing a turn root count once."""
+    roots, count = set(), 0
+    for turn in transcript:
+        if turn.get("role") != "assistant":
+            continue
+        root = turn.get("turn")
+        if root is None:
+            count += 1
+        elif root not in roots:
+            roots.add(root)
+            count += 1
+    return count
+
+
 LEGACY_KEYS = ("target_instructions", "simulator_instructions", "target_tools", "expected")
 MAX_FIXTURE_FIELD_VALUE_CHARS = 20_000
 
@@ -40,7 +66,7 @@ class SimulationCase:
     silence_s: float = 30.0
 
     @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> "SimulationCase":
+    def from_dict(cls, value: dict[str, Any], *, modality: str | None = None) -> "SimulationCase":
         """Build a case from the hosted case document.
 
         ``name``, ``starter``, ``target`` (``instructions``, optional ``tools``, ``voice``,
@@ -52,7 +78,7 @@ class SimulationCase:
             raise ValueError(
                 f"{', '.join(stale)}: cases use the hosted shape (target.instructions, "
                 "target.tools, simulator.instructions, checks, limits); see the evals guide")
-        value = validate_case(value)                # the hosted rules, the hosted messages
+        value = validate_case(value, modality=modality)   # the hosted rules and messages
         target = value.get("target") or {}
         simulator = value.get("simulator") or {}
         limits = value["limits"]
@@ -144,8 +170,7 @@ def evaluate_checks(case: SimulationCase, report: SimulationReport) -> list[dict
             if missing:
                 detail = f"missing required fields: {', '.join(missing)}"
         elif kind == "max_turns":
-            passed = sum(turn["role"] == "assistant" for turn in report.transcript) <= int(
-                check.get("value", 20))
+            passed = assistant_turns(report.transcript) <= int(check.get("value", 20))
         results.append({"type": kind, "name": name, "value": value, "pass": passed,
                         "detail": detail})
     return results
@@ -229,6 +254,8 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
     stop = asyncio.Event()
     last_activity = {"at": time.monotonic()}
     target_turns = {"count": 0}
+    target_turn_roots: set[str] = set()
+    last_speaker = {"side": None}    # who spoke last: a silence is the other side's to explain
     repetition = {"text": "", "count": 0}
 
     async def forward_text(destination: ConverseSession, text: str) -> None:
@@ -280,15 +307,24 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
                         })
                 elif side == "target" and event.type == "utterance":
                     text = str(event.data.get("text") or "")
-                    report.transcript.append({"role": "assistant", "text": text})
+                    root = turn_root(event.data.get("turn_id"))
+                    entry = {"role": "assistant", "text": text}
+                    if root is not None:
+                        entry["turn"] = root
+                    report.transcript.append(entry)
+                    last_speaker["side"] = "target"
                     if modality == "text":
                         relays[side].utterance(text)
-                    target_turns["count"] += 1
+                    if root is None or root not in target_turn_roots:   # bridge + final: one turn
+                        if root is not None:
+                            target_turn_roots.add(root)
+                        target_turns["count"] += 1
                     if target_turns["count"] >= case.max_turns:
                         report.termination_reason = "max_turns"
                         stop.set()
                 elif side == "simulator" and event.type == "utterance":
                     text = str(event.data.get("text") or "")
+                    last_speaker["side"] = "simulator"
                     if modality == "text" and text:
                         relays[side].utterance(text)
                 elif event.type == "working":
@@ -324,7 +360,9 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
                         })
                 elif event.type == "session_end_requested":
                     if not stop.is_set():
-                        report.termination_reason = "completed"
+                        # The simulated user hanging up is a harness event, not the agent's.
+                        report.termination_reason = (
+                            "completed" if side == "target" else "simulator_ended")
                         stop.set()
                 elif event.type == "error":
                     report.termination_reason = "connection_error"
@@ -344,7 +382,9 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
         while not stop.is_set():
             await asyncio.sleep(1)
             if time.monotonic() - last_activity["at"] >= case.silence_s:
-                report.termination_reason = "silence_guard"
+                # The agent spoke last and the simulated user never answered: simulator_silent.
+                report.termination_reason = (
+                    "simulator_silent" if last_speaker["side"] == "target" else "silence_guard")
                 stop.set()
 
     tasks = [
