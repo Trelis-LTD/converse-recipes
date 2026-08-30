@@ -49,9 +49,14 @@ a persistent `ck_` key).
 ## Evals: run cases locally, then push them
 
 A case is one JSON file, the same document the hosted evals API accepts: `name`, `starter`,
-`target` (`instructions`, `tools`), `simulator` (`instructions`), `fixtures`, `checks` and
-`limits`. [`examples/simulations/appointment_booking.json`](examples/simulations/appointment_booking.json)
+`target` (`instructions`, `tools`, `end_call`), `simulator` (`instructions`), `fixtures`, `checks`
+and `limits`. [`examples/simulations/appointment_booking.json`](examples/simulations/appointment_booking.json)
 is a complete one. Field reference: the [evals guide](https://converse.trelis.com/docs/api/evals/).
+
+The agent ends a call by calling the managed `end_call` tool, which `target.end_call` (default
+true) gives it; set it to false for an agent that must never hang up. The simulated user always
+has it. Either call is recorded as a tool call named `end_call`, so `completed` means the agent
+ended the call and `simulator_ended` means the simulated user did.
 
 Run a case, or every case in a directory, locally. Two Converse sessions talk to each other: the
 target agent and a simulated caller. Text forwards committed utterances; voice cross-pipes the
