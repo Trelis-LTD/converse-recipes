@@ -16,10 +16,6 @@ uv sync
 cp .env.example .env
 ```
 
-Until the text SDK releases land on PyPI/npm, this repository pins the reviewed public SDK commit
-used by the reference implementation. The Python and browser examples therefore remain runnable
-without publishing a prerelease package.
-
 ## Guided customer-research assistant
 
 [`examples/guided_customer_research`](examples/guided_customer_research) is a non-trivial guided
@@ -65,6 +61,10 @@ hosted case instead of duplicating it; the run appears on the
 ```sh
 uv run converse-evals push examples/simulations/ --modality text --wait
 ```
+
+With `--wait` the command exits non-zero unless the run passes, so it can gate a CI job in your
+agent's repository: put `CONVERSE_API_KEY` in a secret and run it on every change to the agent or
+its cases. Without `--wait` it returns as soon as the run is queued.
 
 To answer tool calls with your own Python instead of fixed fixtures, build the case in code; see
 [`examples/simulations/with_callbacks.py`](examples/simulations/with_callbacks.py). Hosted runs

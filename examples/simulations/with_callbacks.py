@@ -21,7 +21,8 @@ async def main() -> None:
         return {"slots": [{"slot_id": "tue-1530", "time": "3:30pm", "price": "€85"}]}
 
     def book(args):
-        return {"booked": True, "confirmation": "LOCAL-2048", "slot_id": args["slot_id"]}
+        # The case checks that this code reaches the caller, so answer with the same one.
+        return {"booked": True, "confirmation": "PT-2048", "slot_id": args["slot_id"]}
 
     case = replace(case, fixtures={"check_availability": lookup, "book_appointment": book})
     report = await run_simulation(
