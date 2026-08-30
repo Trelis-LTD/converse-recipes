@@ -20,4 +20,5 @@ jobs:
           prune-cache: true
       - run: uv sync --frozen
       - run: uv run pytest
-
+      - run: uv sync --project examples/integrations/twilio --frozen
+      - run: uv run --project examples/integrations/twilio pytest examples/integrations/twilio -q

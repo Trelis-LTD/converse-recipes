@@ -9,6 +9,19 @@ orchestration. There is no parallel simulator client and no eval-only conversati
 simulated user is another Converse session. Text and voice select different I/O on the same
 session primitive.
 
+## Integrations
+
+[`examples/integrations/twilio`](examples/integrations/twilio) is the maintained inbound Twilio
+Media Streams bridge. It is a standalone uv project with configuration instructions and offline
+tests, including the optional customer-controlled human handoff.
+
+```sh
+cd examples/integrations/twilio
+cp env.example .env
+uv sync --frozen
+uv run pytest -q
+```
+
 ## Install
 
 ```sh

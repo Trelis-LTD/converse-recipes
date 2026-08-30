@@ -1,0 +1,16 @@
+[project]
+name = "converse-twilio-example"
+version = "0.1.0"
+description = "Inbound Twilio Media Streams reference bridge for Converse."
+requires-python = ">=3.11"
+dependencies = [
+    "converse-sdk>=0.13.1",
+    "fastapi>=0.115",
+    "numpy>=1.26",
+    "python-multipart>=0.0.18",
+    "twilio>=9.4",
+    "uvicorn[standard]>=0.34",
+]
+
+[dependency-groups]
+dev = ["httpx>=0.28", "pytest>=8.3"]
