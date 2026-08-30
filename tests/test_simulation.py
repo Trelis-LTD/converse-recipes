@@ -75,6 +75,10 @@ def test_checks_match_the_hosted_runner_and_skip_judges():
     report.fixture_state["intake"]["phone"] = "555"
     report.check_results = evaluate_checks(case, report)
     assert report.passed is True                        # the skipped judge does not block
+    report.termination_reason = "simulator_ended"       # the simulated user hung up: checks decide
+    assert report.passed is True
+    report.termination_reason = "silence_guard"         # the agent went quiet: a failure
+    assert report.passed is False
 
 
 def test_fixtures_answer_like_hosted_runs():

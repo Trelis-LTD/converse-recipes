@@ -117,11 +117,14 @@ class SimulationReport:
 
     @property
     def passed(self) -> bool:
-        """No error, a normal end, and every check that ran here passed. Judge checks only run
-        hosted (they need the judge model); they are reported as skipped, not as failures."""
+        """No error, an end the agent is not to blame for, and every check that ran here
+        passed. The simulated user ending the conversation or going quiet is named in the
+        termination reason, but the checks decide. Judge checks only run hosted (they need the
+        judge model); they are reported as skipped, not as failures."""
         return (
             not self.error
-            and self.termination_reason in {"completed", "max_turns"}
+            and self.termination_reason in {
+                "completed", "max_turns", "simulator_ended", "simulator_silent"}
             and all(result["pass"] for result in self.check_results if not result.get("skipped"))
         )
 
