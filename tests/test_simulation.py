@@ -7,6 +7,7 @@ import pytest
 from converse_recipes.cli import collect_cases, push
 from converse_recipes.simulation import (
     SimulationCase,
+    assistant_turns,
     SimulationReport,
     _fixture_result,
     evaluate_checks,
@@ -151,3 +152,23 @@ def test_push_upserts_then_starts_one_run(tmp_path):
     assert lines[0] == "2 cases pushed: a, b"
     assert lines[1] == "run run-1234 started (voice): https://example.test/evals/run-1234abcd"
     assert lines[-1] == "run run-1234 passed"
+
+
+def test_bridge_and_final_are_one_turn_and_voice_starters_are_checked():
+    transcript = [{"role": "user", "text": "hi"},
+                  {"role": "assistant", "text": "Let me check.", "turn": "turn1"},
+                  {"role": "assistant", "text": "Tuesday.", "turn": "turn1"},
+                  {"role": "assistant", "text": "Else?", "turn": "turn2"},
+                  {"role": "assistant", "text": "legacy entry"}]
+    assert assistant_turns(transcript) == 3
+    case = SimulationCase.from_dict({"name": "n", "starter": "I need help. " * 40})
+    assert case.max_turns == 20
+    with pytest.raises(ValueError, match="300 characters"):
+        SimulationCase.from_dict({"name": "n", "starter": "I need help. " * 40}, modality="voice")
+
+
+def test_converse_sim_checks_voice_starters_before_running(tmp_path):
+    (tmp_path / "long.json").write_text(json.dumps({"name": "long", "starter": "I need help. " * 40}))
+    assert collect_cases([tmp_path], "text")[0].name == "long"
+    with pytest.raises(SystemExit, match="300 characters"):
+        collect_cases([tmp_path], "voice")
