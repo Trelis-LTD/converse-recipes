@@ -7,7 +7,7 @@ requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{name = "Trelis Research"}]
 dependencies = [
-  "converse-sdk>=0.12.0",
+  "converse-sdk>=0.13.0",
   "httpx>=0.28",
   "numpy>=1.26",
   "python-dotenv>=1.0",
@@ -16,6 +16,7 @@ dependencies = [
 [project.scripts]
 converse-guided = "converse_recipes.cli:guided_main"
 converse-sim = "converse_recipes.cli:simulation_main"
+converse-evals = "converse_recipes.cli:evals_main"
 
 [dependency-groups]
 dev = ["pytest>=8.0"]
