@@ -30,7 +30,7 @@
   "checks": [
     {"type": "tool_called", "value": "check_availability"},
     {"type": "tool_called", "value": "book_appointment"},
-    {"type": "contains", "value": "confirmation code"},
+    {"type": "contains", "value": "PT-2048", "name": "the confirmation code from book_appointment reaches the caller"},
     {"type": "judge", "criterion": "The assistant stated the exact slot and price before booking and gave the confirmation code only after the booking tool confirmed it."}
   ],
   "limits": {"max_turns": 10, "timeout_s": 240, "silence_s": 35}
