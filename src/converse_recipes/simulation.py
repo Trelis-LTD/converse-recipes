@@ -58,7 +58,7 @@ class SimulationCase:
     target_instructions: str
     simulator_instructions: str
     target_tools: tuple[dict[str, Any], ...] = ()
-    target_options: dict[str, Any] = field(default_factory=dict)   # voice, web_search
+    target_options: dict[str, Any] = field(default_factory=dict)   # voice, web_search, end_call
     fixtures: dict[str, Fixture] = field(default_factory=dict)
     checks: tuple[dict[str, Any], ...] = ()
     max_turns: int = 20
@@ -70,8 +70,11 @@ class SimulationCase:
         """Build a case from the hosted case document.
 
         ``name``, ``starter``, ``target`` (``instructions``, optional ``tools``, ``voice``,
-        ``web_search``), ``simulator`` (``instructions``), ``fixtures``, ``checks`` and
-        ``limits`` (``max_turns``, ``timeout_s``, ``silence_s``).
+        ``web_search``, ``end_call``), ``simulator`` (``instructions``), ``fixtures``,
+        ``checks`` and ``limits`` (``max_turns``, ``timeout_s``, ``silence_s``).
+
+        ``target.end_call`` (default true) gives the agent the managed ``end_call`` tool, the
+        only way it can end the conversation. The simulated user always has it.
         """
         stale = [key for key in LEGACY_KEYS if key in value]
         if stale:
@@ -89,7 +92,8 @@ class SimulationCase:
             target_instructions=str(target.get("instructions") or ""),
             simulator_instructions=str(simulator.get("instructions") or ""),
             target_tools=tuple(target.get("tools") or ()),
-            target_options={key: target[key] for key in ("voice", "web_search") if key in target},
+            target_options={key: target[key] for key in ("voice", "web_search", "end_call")
+                            if key in target},
             fixtures=dict(value.get("fixtures") or {}),
             checks=checks,
             max_turns=int(limits["max_turns"]),
@@ -235,16 +239,20 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
             tools=list(case.target_tools) or None, greeting=False,
             voice=case.target_options.get("voice"),
             web_search=bool(case.target_options.get("web_search", False)),
+            end_call=bool(case.target_options.get("end_call", True)),
             silence_nudge_s=SIMULATION_SILENCE_NUDGE_S if modality == "voice" else None,
             silence_end_s=SIMULATION_SILENCE_END_S if modality == "voice" else None,
         ),
     )
     try:
+        # The simulated user always has end_call, so it can hang up when its instructions say
+        # the conversation is over (reported as simulator_ended).
         simulator = await ConverseSession.connect(
             url, api_key=api_key, session_id=simulator_id,
             mode=ConverseMode(
                 modality=modality, instructions=case.simulator_instructions,
-                tools=None, greeting=case.starter if modality == "voice" else False,
+                tools=None, end_call=True,
+                greeting=case.starter if modality == "voice" else False,
                 silence_nudge_s=SIMULATION_SILENCE_NUDGE_S if modality == "voice" else None,
                 silence_end_s=SIMULATION_SILENCE_END_S if modality == "voice" else None,
             ),
@@ -362,8 +370,16 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
                                         if isinstance(fixture, dict) else "fixed"),
                         })
                 elif event.type == "session_end_requested":
+                    # The broker sends this when the model called end_call(farewell). Record it
+                    # as a tool call, as hosted runs do, so tool_called checks and the run page
+                    # see it. The simulated user hanging up is a harness event, not the agent's.
+                    if len(report.events) < 2000:
+                        report.events.append({
+                            "side": side, "type": "tool_call", "t_ms": event.t_ms,
+                            "name": "end_call", "id": "end_call",
+                            "args": {"farewell": event.data.get("farewell", "")},
+                        })
                     if not stop.is_set():
-                        # The simulated user hanging up is a harness event, not the agent's.
                         report.termination_reason = (
                             "completed" if side == "target" else "simulator_ended")
                         stop.set()

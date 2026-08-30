@@ -11,6 +11,7 @@ from converse_recipes.simulation import (
     SimulationReport,
     _fixture_result,
     evaluate_checks,
+    run_simulation,
 )
 
 SAMPLE = Path(__file__).resolve().parents[1] / "examples/simulations/appointment_booking.json"
@@ -33,6 +34,64 @@ def test_case_uses_the_hosted_document_shape():
         SimulationCase.from_dict({"name": "bad", "starter": "hi", "checks": [{"type": "contains"}]})
     with pytest.raises(ValueError, match="starter must contain"):
         SimulationCase.from_dict({"name": "no starter"})
+    assert case.target_options["end_call"] is True
+    assert "end_call" not in SimulationCase.from_dict({"name": "n", "starter": "hi"}).target_options
+    with pytest.raises(ValueError, match="target.end_call must be true or false"):
+        SimulationCase.from_dict({"name": "n", "starter": "hi", "target": {"end_call": "no"}})
+
+
+class _FakeSession:
+    def __init__(self, events):
+        self._events = events
+        self.sent = []
+
+    async def events(self):
+        for event in self._events:
+            yield event
+        await asyncio.sleep(30)
+
+    async def send_text(self, text):
+        self.sent.append(text)
+
+    async def send_tool_result(self, *_args, **_kwargs):
+        pass
+
+    async def close(self):
+        pass
+
+
+def test_end_call_is_a_recorded_tool_call_and_the_simulator_always_has_it(monkeypatch):
+    """The broker's session_end_requested means the model called end_call(farewell). It is
+    recorded as a tool call, as hosted runs record it; the target's end_call flag follows the
+    case and the simulated user always has the tool."""
+    from types import SimpleNamespace
+    target = _FakeSession([
+        SimpleNamespace(type="utterance", t_ms=1, data={"text": "Goodbye."}),
+        SimpleNamespace(type="done", t_ms=2, data={}),
+        SimpleNamespace(type="session_end_requested", t_ms=3, data={"farewell": "Goodbye."}),
+    ])
+    simulator = _FakeSession([])
+    sessions = iter([target, simulator])
+    modes = []
+
+    async def connect(*_args, mode, **_kwargs):
+        modes.append(mode)
+        return next(sessions)
+
+    monkeypatch.setattr("converse_recipes.simulation.ConverseSession.connect", connect)
+    case = SimulationCase.from_dict({
+        "name": "n", "starter": "Hello", "target": {"end_call": False},
+        "checks": [{"type": "tool_called", "value": "end_call"}], "limits": {"timeout_s": 10},
+    })
+    report = asyncio.run(run_simulation("ws://test", "key", case))
+
+    assert [mode.end_call for mode in modes] == [False, True]
+    assert report.termination_reason == "completed"
+    assert [e for e in report.events if e["type"] == "tool_call"] == [{
+        "side": "target", "type": "tool_call", "t_ms": 3, "name": "end_call",
+        "id": "end_call", "args": {"farewell": "Goodbye."},
+    }]
+    assert report.check_results[0]["pass"] is True and report.passed
 
 
 def test_checks_match_the_hosted_runner_and_skip_judges():
