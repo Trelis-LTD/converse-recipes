@@ -1,0 +1,60 @@
+{
+  "name": "specialist qualification and accepted handoff",
+  "starter": "Hi, I need some help choosing the right service.",
+  "target": {
+    "instructions": "Help the caller qualify for a specialist. Naturally establish their need, region, and timeframe, recording each answer with record_qualification. Accept corrections and record the corrected answer. Do not read out a checklist. Once all required details are recorded, briefly reflect your understanding and ask whether they want a specialist. Call start_handoff only after the caller explicitly agrees. It is permission-gated, so if permission remains pending, ask them to confirm the handoff once more. Never claim a handoff has started until the tool confirms it, and share its reference when one is returned.",
+    "tools": [
+      {
+        "name": "record_qualification",
+        "description": "Record or correct one qualification answer after the caller provides it.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "field": {"type": "string", "enum": ["need", "region", "timeframe"]},
+            "value": {"type": "string"}
+          },
+          "required": ["field", "value"],
+          "additionalProperties": false
+        },
+        "read_only": false,
+        "expected_duration": "instant",
+        "status_label": "qualification"
+      },
+      {
+        "name": "start_handoff",
+        "description": "Request a specialist handoff after qualification is complete and the caller explicitly agrees.",
+        "parameters": {
+          "type": "object",
+          "properties": {"summary": {"type": "string"}},
+          "required": ["summary"],
+          "additionalProperties": false
+        },
+        "requires_permission": true,
+        "expected_duration": "seconds",
+        "status_label": "specialist handoff"
+      }
+    ],
+    "end_call": true
+  },
+  "simulator": {
+    "instructions": "You are Sam, a caller looking for help choosing a business phone service. Stay in the caller role. Reveal facts naturally when asked: you need a service for a ten-person support team, you are in the north region, and you want to start this month. Do not invent tool results or speak for the assistant. After the assistant accurately reflects all three details and asks about a specialist, explicitly agree. If asked to confirm permission again, repeat your direct agreement. Do not end until the assistant reports the real handoff result and reference. Then thank them, say goodbye, and end the conversation."
+  },
+  "fixtures": {
+    "record_qualification": {
+      "fixture_type": "field_store",
+      "field_arg": "field",
+      "value_arg": "value",
+      "fields": [{"key": "need"}, {"key": "region"}, {"key": "timeframe"}]
+    },
+    "start_handoff": {
+      "result": {"handoff_requested": true, "handoff_reference": "HX-2048"}
+    }
+  },
+  "checks": [
+    {"type": "fixture_complete", "value": "record_qualification"},
+    {"type": "tool_called", "value": "start_handoff"},
+    {"type": "contains", "value": "HX-2048", "name": "the handoff reference reaches the caller"},
+    {"type": "judge", "criterion": "The assistant collected and reflected the need, region, and timeframe, obtained explicit consent, then requested the handoff and reported only the confirmed result."}
+  ],
+  "limits": {"max_turns": 10, "timeout_s": 240, "silence_s": 35}
+}
