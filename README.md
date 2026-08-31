@@ -29,6 +29,10 @@ uv sync
 cp .env.example .env
 ```
 
+## Qualification and specialist handoff
+
+[`examples/qualification_handoff`](examples/qualification_handoff) collects configurable qualification fields, handles corrections, obtains explicit consent, and calls a customer-owned specialist handoff. It includes text and voice eval cases plus Python callback seams, and reuses the maintained Twilio bridge for live calls.
+
 ## Guided customer-research assistant
 
 [`examples/guided_customer_research`](examples/guided_customer_research) is a non-trivial guided
