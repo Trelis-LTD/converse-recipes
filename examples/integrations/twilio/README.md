@@ -60,5 +60,4 @@ uv run pytest -q
 
 The tests are offline and require no Converse or Twilio credentials.
 
-This is an inbound reference integration, not a dialer. Converse's acceptable-use policy prohibits
-outbound robocalling.
+This is an inbound reference integration, not a dialer.
