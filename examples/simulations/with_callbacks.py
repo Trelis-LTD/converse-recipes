@@ -26,7 +26,7 @@ async def main() -> None:
 
     case = replace(case, fixtures={"check_availability": lookup, "book_appointment": book})
     report = await run_simulation(
-        os.environ.get("CONVERSE_URL", "wss://converse.trelis.com/ws"),
+        os.environ.get("CONVERSE_URL", "wss://dialt.com/ws"),
         os.environ["CONVERSE_API_KEY"], case, modality="text",
     )
     print(json.dumps({

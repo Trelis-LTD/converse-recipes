@@ -34,7 +34,7 @@ async def main() -> None:
         ),
     )
     report = await run_simulation(
-        os.environ.get("CONVERSE_URL", "wss://converse.trelis.com/ws"),
+        os.environ.get("CONVERSE_URL", "wss://dialt.com/ws"),
         os.environ["CONVERSE_API_KEY"],
         case,
         modality=os.environ.get("CONVERSE_MODALITY", "text"),

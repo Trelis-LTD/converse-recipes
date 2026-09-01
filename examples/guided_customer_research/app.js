@@ -1,4 +1,4 @@
-import { ConverseClient } from 'https://cdn.jsdelivr.net/gh/Trelis-LTD/voice-loop-pro@7764c1d44ab8f2f37f065137fb2b8bda82d2421d/sdk/browser/src/index.js';
+import { ConverseClient } from 'https://cdn.jsdelivr.net/gh/dialt-ai/dialt@aa92044041df841b8f9a92b3e100f7f385174e6c/sdk/browser/src/index.js';
 
 const plan = await fetch('./plan.json').then(response => response.json());
 const answers = {};
