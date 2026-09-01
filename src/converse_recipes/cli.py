@@ -13,7 +13,7 @@ from .conversation_plan import ConversationPlan
 from .guided import GuidedAssistant
 from .simulation import SimulationCase, report_attempt, run_simulation
 
-DEFAULT_EVALS_URL = "https://converse.trelis.com"
+DEFAULT_EVALS_URL = "https://dialt.com"
 
 
 def _api_key() -> str:
@@ -26,7 +26,7 @@ def _api_key() -> str:
 
 def _credentials() -> tuple[str, str]:
     api_key = _api_key()
-    return os.environ.get("CONVERSE_URL", "wss://converse.trelis.com/ws"), api_key
+    return os.environ.get("CONVERSE_URL", "wss://dialt.com/ws"), api_key
 
 
 async def _guided(path: Path) -> None:

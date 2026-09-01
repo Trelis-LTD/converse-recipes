@@ -1,7 +1,7 @@
 [project]
-name = "converse-twilio-example"
+name = "dialt-twilio-example"
 version = "0.1.0"
-description = "Inbound Twilio Media Streams reference bridge for Converse."
+description = "Inbound Twilio Media Streams reference bridge for Dialt."
 requires-python = ">=3.11"
 dependencies = [
     "converse-sdk>=0.13.1",
@@ -9,6 +9,7 @@ dependencies = [
     "numpy>=1.26",
     "python-multipart>=0.0.18",
     "twilio>=9.4",
+    "soxr>=1.1",
     "uvicorn[standard]>=0.34",
 ]
 

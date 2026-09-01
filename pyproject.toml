@@ -1,22 +1,23 @@
 [project]
-name = "trelis-converse-recipes"
+name = "dialt-recipes"
 version = "0.1.0"
-description = "Reference recipes built from the public Trelis Converse SDK"
+description = "Reference recipes built from the public Dialt SDK"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
-authors = [{name = "Trelis Research"}]
+authors = [{name = "Dialt"}]
 dependencies = [
   "converse-sdk>=0.14.0",
   "httpx>=0.28",
   "numpy>=1.26",
   "python-dotenv>=1.0",
+  "soxr>=1.1",
 ]
 
 [project.scripts]
-converse-guided = "converse_recipes.cli:guided_main"
-converse-sim = "converse_recipes.cli:simulation_main"
-converse-evals = "converse_recipes.cli:evals_main"
+dialt-guided = "converse_recipes.cli:guided_main"
+dialt-sim = "converse_recipes.cli:simulation_main"
+dialt-evals = "converse_recipes.cli:evals_main"
 
 [dependency-groups]
 dev = ["pytest>=8.0"]

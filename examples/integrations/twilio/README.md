@@ -1,8 +1,8 @@
-# Converse + Twilio inbound bridge
+# Dialt + Twilio inbound bridge
 
-This runnable integration connects an inbound Twilio phone call to one Converse session. Twilio
+This runnable integration connects an inbound Twilio phone call to one Dialt session. Twilio
 owns the phone number and call; this bridge owns deployment, audio transport and application
-tools; Converse owns the realtime voice conversation.
+tools; Dialt owns the realtime voice conversation.
 
 It uses Twilio bidirectional Media Streams. It does not require Twilio ConversationRelay.
 
@@ -23,15 +23,15 @@ as `POST https://voice.example.com/voice`.
 The webhook returns `<Connect><Stream>`. The bridge:
 
 - verifies Twilio signatures for the HTTP and WebSocket requests;
-- converts Twilio's 8 kHz G.711 mu-law audio to Converse's 16 kHz wire format;
-- converts Converse output back to Twilio audio; and
-- maps Twilio `mark` and `clear` playback state to Converse interruption events.
+- converts Twilio's 8 kHz G.711 mu-law audio to Dialt's 16 kHz wire format;
+- converts Dialt output back to Twilio audio; and
+- maps Twilio `mark` and `clear` playback state to Dialt interruption events.
 
 ## Add application tools
 
 Edit `tool_manifest()` and `execute_tool()` in `bridge.py`. Keep service credentials and effects
 inside the bridge. Only tool schemas, bounded arguments and bounded results should cross the
-Converse session.
+Dialt session.
 
 ## Optional human handoff
 
@@ -58,6 +58,6 @@ webhook-security guidance.
 uv run pytest -q
 ```
 
-The tests are offline and require no Converse or Twilio credentials.
+The tests are offline and require no Dialt or Twilio credentials.
 
 This is an inbound reference integration, not a dialer.

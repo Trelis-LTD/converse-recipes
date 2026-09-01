@@ -1,12 +1,12 @@
-# Converse recipes
+# Dialt recipes
 
 Runnable patterns built entirely from the public
 [`converse-sdk`](https://pypi.org/project/converse-sdk/) and
 [`@trelis/converse`](https://www.npmjs.com/package/@trelis/converse) surfaces.
 
-The boundary is deliberate: Converse owns conversation; recipes own application policy and
+The boundary is deliberate: Dialt owns conversation; recipes own application policy and
 orchestration. There is no parallel simulator client and no eval-only conversation engine. A
-simulated user is another Converse session. Text and voice select different I/O on the same
+simulated user is another Dialt session. Text and voice select different I/O on the same
 session primitive.
 
 ## Integrations
@@ -55,14 +55,14 @@ a persistent `ck_` key).
 A case is one JSON file, the same document the hosted evals API accepts: `name`, `starter`,
 `target` (`instructions`, `tools`, `end_call`), `simulator` (`instructions`), `fixtures`, `checks`
 and `limits`. [`examples/simulations/appointment_booking.json`](examples/simulations/appointment_booking.json)
-is a complete one. Field reference: the [evals guide](https://converse.trelis.com/docs/api/evals/).
+is a complete one. Field reference: the [evals guide](https://dialt.com/docs/api/evals/).
 
 The agent ends a call by calling the managed `end_call` tool, which `target.end_call` (default
 true) gives it; set it to false for an agent that must never hang up. The simulated user always
 has it. Either call is recorded as a tool call named `end_call`, so `completed` means the agent
 ended the call and `simulator_ended` means the simulated user did.
 
-Run a case, or every case in a directory, locally. Two Converse sessions talk to each other: the
+Run a case, or every case in a directory, locally. Two Dialt sessions talk to each other: the
 target agent and a simulated caller. Text forwards committed utterances; voice cross-pipes the
 audio between the sessions and never touches a speaker or microphone.
 
@@ -78,7 +78,7 @@ does hosted, so a local pass means the case declares every tool the agent uses.
 
 Push the same files and run them hosted. Cases are matched by name, so a re-push updates the
 hosted case instead of duplicating it; the run appears on the
-[Evals dashboard](https://converse.trelis.com/evals).
+[Evals dashboard](https://dialt.com/evals).
 
 ```sh
 uv run converse-evals push examples/simulations/ --modality text --wait
