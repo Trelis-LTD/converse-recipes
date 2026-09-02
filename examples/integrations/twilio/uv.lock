@@ -373,17 +373,17 @@ wheels = [
 ]
 
 [[package]]
-name = "converse-sdk"
-version = "0.13.1"
+name = "dialt-sdk"
+version = "0.17.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/aa/ae/9bd8b97a7613ff3c8d81606def5774ebd33fa11ff4006d7136209122eb1e/converse_sdk-0.13.1.tar.gz", hash = "sha256:a0ee4be69eac3d6057787af5396eac96bd64c3b46a82029662c0c7853b3f2ba5", size = 38125, upload-time = "2026-08-30T09:04:28.376Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/13/53/9582e8f18ecbfa2aa7aa693f14141a78b3505dda941bc48b62677aaef6b8/dialt_sdk-0.17.0.tar.gz", hash = "sha256:5fb4196a0ae01664d31c203325acf456f342b6c09f8de99a4ab11f28adabdc1a", size = 39770, upload-time = "2026-09-02T20:57:28.808Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d6/ea/4411164e11fd5081df537bed7b3771479d7ceb92cf05e146d0d53a9f602c/converse_sdk-0.13.1-py3-none-any.whl", hash = "sha256:4255912f64df625706f2f1562911a9e856d02c550d818fc810ba723990e44745", size = 32983, upload-time = "2026-08-30T09:04:27.353Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/2d/09e869eac53e4bc6ba9a3fcd3c4e5296d331ff69b28b0f9a64987387d145/dialt_sdk-0.17.0-py3-none-any.whl", hash = "sha256:05f34feee32488de388af3d2d0cb3523bc7a362b04df740b3b27d9197dab8e46", size = 33950, upload-time = "2026-09-02T20:57:27.773Z" },
 ]
 
 [[package]]
@@ -391,7 +391,7 @@ name = "dialt-twilio-example"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "converse-sdk" },
+    { name = "dialt-sdk" },
     { name = "fastapi" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -409,7 +409,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "converse-sdk", specifier = ">=0.13.1" },
+    { name = "dialt-sdk", specifier = ">=0.17.0" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "python-multipart", specifier = ">=0.0.18" },

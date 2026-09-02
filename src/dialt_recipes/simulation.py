@@ -9,9 +9,9 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 import httpx
-from converse_sdk import ConverseMode, ConverseSession
-from converse_sdk.evals import EvalsError, validate_case
-from converse_sdk.relay import (
+from dialt import DialtMode, DialtSession
+from dialt.evals import EvalsError, validate_case
+from dialt.relay import (
     SIMULATION_SILENCE_END_S,
     SIMULATION_SILENCE_NUDGE_S,
     TextTurnRelay,
@@ -223,7 +223,7 @@ async def _fixture_result(fixtures: dict[str, Fixture], name: str, args: dict[st
 
 async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
                          modality: str = "text") -> SimulationReport:
-    """Run target and simulated user as two ordinary Converse sessions.
+    """Run target and simulated user as two ordinary Dialt sessions.
 
     In voice mode, received Float32 audio is paced by the service and immediately sent to the
     other session. It is never opened on a sound device or written to an output file.
@@ -232,9 +232,9 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
         raise ValueError("modality must be text or voice")
     suffix = uuid.uuid4().hex[:10]
     target_id, simulator_id = f"recipe-target-{suffix}", f"recipe-user-{suffix}"
-    target = await ConverseSession.connect(
+    target = await DialtSession.connect(
         url, api_key=api_key, session_id=target_id,
-        mode=ConverseMode(
+        mode=DialtMode(
             modality=modality, instructions=case.target_instructions,
             tools=list(case.target_tools) or None, greeting=False,
             voice=case.target_options.get("voice"),
@@ -247,9 +247,9 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
     try:
         # The simulated user always has end_call, so it can hang up when its instructions say
         # the conversation is over (reported as simulator_ended).
-        simulator = await ConverseSession.connect(
+        simulator = await DialtSession.connect(
             url, api_key=api_key, session_id=simulator_id,
-            mode=ConverseMode(
+            mode=DialtMode(
                 modality=modality, instructions=case.simulator_instructions,
                 tools=None, end_call=True,
                 greeting=case.starter if modality == "voice" else False,
@@ -269,7 +269,7 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
     last_speaker = {"side": None}    # who spoke last: a silence is the other side's to explain
     repetition = {"text": "", "count": 0}
 
-    async def forward_text(destination: ConverseSession, text: str) -> None:
+    async def forward_text(destination: DialtSession, text: str) -> None:
         normalized = " ".join(text.casefold().split())
         if normalized and normalized == repetition["text"]:
             repetition["count"] += 1
@@ -299,8 +299,8 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
         "simulator": VoiceTurnRelay(target, on_error=relay_failed),
     }
 
-    async def consume(side: str, source: ConverseSession,
-                      destination: ConverseSession) -> None:
+    async def consume(side: str, source: DialtSession,
+                      destination: DialtSession) -> None:
         try:
             async for event in source.events():
                 last_activity["at"] = time.monotonic()

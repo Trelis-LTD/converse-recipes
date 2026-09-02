@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from converse_recipes.cli import collect_cases, push
-from converse_recipes.simulation import (
+from dialt_recipes.cli import collect_cases, push
+from dialt_recipes.simulation import (
     SimulationCase,
     assistant_turns,
     SimulationReport,
@@ -78,7 +78,7 @@ def test_end_call_is_a_recorded_tool_call_and_the_simulator_always_has_it(monkey
         modes.append(mode)
         return next(sessions)
 
-    monkeypatch.setattr("converse_recipes.simulation.ConverseSession.connect", connect)
+    monkeypatch.setattr("dialt_recipes.simulation.DialtSession.connect", connect)
     case = SimulationCase.from_dict({
         "name": "n", "starter": "Hello", "target": {"end_call": False},
         "checks": [{"type": "tool_called", "value": "end_call"}], "limits": {"timeout_s": 10},
@@ -230,7 +230,7 @@ def test_bridge_and_final_are_one_turn_and_voice_starters_are_checked():
         SimulationCase.from_dict({"name": "n", "starter": "I need help. " * 40}, modality="voice")
 
 
-def test_converse_sim_checks_voice_starters_before_running(tmp_path):
+def test_dialt_sim_checks_voice_starters_before_running(tmp_path):
     (tmp_path / "long.json").write_text(json.dumps({"name": "long", "starter": "I need help. " * 40}))
     assert collect_cases([tmp_path], "text")[0].name == "long"
     with pytest.raises(SystemExit, match="300 characters"):

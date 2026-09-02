@@ -8,7 +8,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from converse_recipes import SimulationCase, run_simulation
+from dialt_recipes import SimulationCase, run_simulation
 
 
 async def main() -> None:
@@ -26,8 +26,8 @@ async def main() -> None:
 
     case = replace(case, fixtures={"check_availability": lookup, "book_appointment": book})
     report = await run_simulation(
-        os.environ.get("CONVERSE_URL", "wss://dialt.com/ws"),
-        os.environ["CONVERSE_API_KEY"], case, modality="text",
+        os.environ.get("DIALT_URL", "wss://dialt.com/ws"),
+        os.environ["DIALT_API_KEY"], case, modality="text",
     )
     print(json.dumps({
         "passed": report.passed,

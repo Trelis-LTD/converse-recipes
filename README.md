@@ -1,8 +1,8 @@
 # Dialt recipes
 
 Runnable patterns built entirely from the public
-[`converse-sdk`](https://pypi.org/project/converse-sdk/) and
-[`@trelis/converse`](https://www.npmjs.com/package/@trelis/converse) surfaces.
+[`dialt-sdk`](https://pypi.org/project/dialt-sdk/) and
+[`@dialt/sdk`](https://www.npmjs.com/package/@dialt/sdk) surfaces.
 
 The boundary is deliberate: Dialt owns conversation; recipes own application policy and
 orchestration. There is no parallel simulator client and no eval-only conversation engine. A
@@ -24,6 +24,11 @@ uv run pytest -q
 
 ## Install
 
+Version 0.2 uses the `dialt_recipes` import namespace, `DIALT_*` environment names, and
+`dialt-guided`, `dialt-sim`, and `dialt-evals` commands. The pre-0.2 `converse_recipes`
+namespace and legacy names were removed rather than kept as parallel compatibility paths.
+
+
 ```sh
 uv sync
 cp .env.example .env
@@ -43,7 +48,7 @@ naturally.
 Run the terminal version in text mode:
 
 ```sh
-uv run converse-guided examples/guided_customer_research/plan.json
+uv run dialt-guided examples/guided_customer_research/plan.json
 ```
 
 The browser example supports text and voice with the same plan and shows collected evidence live.
@@ -67,8 +72,8 @@ target agent and a simulated caller. Text forwards committed utterances; voice c
 audio between the sessions and never touches a speaker or microphone.
 
 ```sh
-uv run converse-sim examples/simulations/ --modality text
-uv run converse-sim examples/simulations/appointment_booking.json --modality voice
+uv run dialt-sim examples/simulations/ --modality text
+uv run dialt-sim examples/simulations/appointment_booking.json --modality voice
 ```
 
 The deterministic checks (`contains`, `not_contains`, `regex`, `tool_called`,
@@ -81,11 +86,11 @@ hosted case instead of duplicating it; the run appears on the
 [Evals dashboard](https://dialt.com/evals).
 
 ```sh
-uv run converse-evals push examples/simulations/ --modality text --wait
+uv run dialt-evals push examples/simulations/ --modality text --wait
 ```
 
 With `--wait` the command exits non-zero unless the run passes, so it can gate a CI job in your
-agent's repository: put `CONVERSE_API_KEY` in a secret and run it on every change to the agent or
+agent's repository: put `DIALT_API_KEY` in a secret and run it on every change to the agent or
 its cases. Without `--wait` it returns as soon as the run is queued.
 
 To answer tool calls with your own Python instead of fixed fixtures, build the case in code; see
@@ -99,6 +104,6 @@ uv run pytest
 ```
 
 The default suite is offline and secret-free. The manual GitHub workflow runs a bounded live text
-or blackholed-voice smoke when `CONVERSE_API_KEY` is configured.
+or blackholed-voice smoke when `DIALT_API_KEY` is configured.
 
 Licensed under the [Apache License 2.0](LICENSE).
