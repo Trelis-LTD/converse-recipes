@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from converse_recipes.cli import collect_cases
+from dialt_recipes.cli import collect_cases
 
 
 ROOT = Path(__file__).resolve().parents[1]

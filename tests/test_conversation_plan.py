@@ -1,8 +1,8 @@
 import asyncio
 
-from converse_sdk import SessionEvent
+from dialt import SessionEvent
 
-from converse_recipes import ConversationPlan, GuidedAssistant, PlanField
+from dialt_recipes import ConversationPlan, GuidedAssistant, PlanField
 
 
 def plan():

@@ -19,7 +19,7 @@ from functools import lru_cache
 from typing import Any
 from urllib.parse import urlsplit
 
-from converse_sdk import ConverseMode, ConverseSession, float32_to_pcm16
+from dialt import DialtMode, DialtSession, float32_to_pcm16
 from fastapi import (
     FastAPI,
     HTTPException,
@@ -40,12 +40,12 @@ PLAYBACK_DRAIN_TIMEOUT_S = 10
 
 @dataclass(frozen=True)
 class Settings:
-    converse_api_key: str
+    dialt_api_key: str
     twilio_auth_token: str
     public_base_url: str
     twilio_account_sid: str | None = None
     human_handoff_url: str | None = None
-    converse_url: str = "wss://dialt.com/ws"
+    dialt_url: str = "wss://dialt.com/ws"
     voice: str | None = None
     instructions: str | None = None
     greeting: str | bool | None = None
@@ -54,7 +54,7 @@ class Settings:
     def from_env(cls) -> Settings:
         missing = [
             name
-            for name in ("CONVERSE_API_KEY", "TWILIO_AUTH_TOKEN", "PUBLIC_BASE_URL")
+            for name in ("DIALT_API_KEY", "TWILIO_AUTH_TOKEN", "PUBLIC_BASE_URL")
             if not os.environ.get(name)
         ]
         if missing:
@@ -75,7 +75,7 @@ class Settings:
                     "TWILIO_HUMAN_HANDOFF_URL must be an absolute https URL"
                 )
 
-        raw_greeting = os.environ.get("CONVERSE_GREETING")
+        raw_greeting = os.environ.get("DIALT_GREETING")
         greeting: str | bool | None
         if raw_greeting is None:
             greeting = None
@@ -85,14 +85,14 @@ class Settings:
             greeting = raw_greeting
 
         return cls(
-            converse_api_key=os.environ["CONVERSE_API_KEY"],
+            dialt_api_key=os.environ["DIALT_API_KEY"],
             twilio_auth_token=os.environ["TWILIO_AUTH_TOKEN"],
             public_base_url=os.environ["PUBLIC_BASE_URL"].rstrip("/"),
             twilio_account_sid=twilio_account_sid,
             human_handoff_url=human_handoff_url,
-            converse_url=os.environ.get("CONVERSE_URL", "wss://dialt.com/ws"),
-            voice=os.environ.get("CONVERSE_VOICE") or None,
-            instructions=os.environ.get("CONVERSE_INSTRUCTIONS") or None,
+            dialt_url=os.environ.get("DIALT_URL", "wss://dialt.com/ws"),
+            voice=os.environ.get("DIALT_VOICE") or None,
+            instructions=os.environ.get("DIALT_INSTRUCTIONS") or None,
             greeting=greeting,
         )
 
@@ -123,7 +123,7 @@ class PlaybackLedger:
 
     def add(self, duration_ms: float) -> str:
         self._sequence += 1
-        name = f"converse-{self._sequence}"
+        name = f"dialt-{self._sequence}"
         self._pending[name] = duration_ms
         self.changed.set()
         return name
@@ -320,17 +320,17 @@ async def _run_bridge(
     ledger = PlaybackLedger()
     audio = TelephonyAudioBridge()
     upstream_ended = asyncio.Event()
-    mode = ConverseMode(
+    mode = DialtMode(
         voice=settings.voice,
         instructions=settings.instructions,
         greeting=settings.greeting,
         tools=tool_manifest() or None,
     )
 
-    async with await ConverseSession.connect(
-        settings.converse_url,
+    async with await DialtSession.connect(
+        settings.dialt_url,
         session_id=call_sid[:64],
-        api_key=settings.converse_api_key,
+        api_key=settings.dialt_api_key,
         mode=mode,
     ) as session:
         tool_tasks: dict[str, asyncio.Task[None]] = {}
@@ -360,7 +360,7 @@ async def _run_bridge(
                     outcome = "succeeded"
                     verified = True
                 except Exception:
-                    logger.exception("Converse tool %s failed", name)
+                    logger.exception("Dialt tool %s failed", name)
                     result = {"error": "tool_failed"}
                     outcome = "failed"
                     verified = False

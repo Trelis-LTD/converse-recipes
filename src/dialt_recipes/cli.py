@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 
-from converse_sdk.evals import EvalsClient, EvalsError, load_cases, validate_case
+from dialt.evals import EvalsClient, EvalsError, load_cases, validate_case
 from dotenv import load_dotenv
 
 from .conversation_plan import ConversationPlan
@@ -18,15 +18,15 @@ DEFAULT_EVALS_URL = "https://dialt.com"
 
 def _api_key() -> str:
     load_dotenv()
-    api_key = os.environ.get("CONVERSE_API_KEY", "").strip()
+    api_key = os.environ.get("DIALT_API_KEY", "").strip()
     if not api_key:
-        raise SystemExit("CONVERSE_API_KEY is required in the environment or .env")
+        raise SystemExit("DIALT_API_KEY is required in the environment or .env")
     return api_key
 
 
 def _credentials() -> tuple[str, str]:
     api_key = _api_key()
-    return os.environ.get("CONVERSE_URL", "wss://dialt.com/ws"), api_key
+    return os.environ.get("DIALT_URL", "wss://dialt.com/ws"), api_key
 
 
 async def _guided(path: Path) -> None:
@@ -58,7 +58,7 @@ async def _guided(path: Path) -> None:
 
 
 def guided_main() -> None:
-    parser = argparse.ArgumentParser(description="Run a ConversationPlan with Converse")
+    parser = argparse.ArgumentParser(description="Run a ConversationPlan with Dialt")
     parser.add_argument("plan", type=Path)
     args = parser.parse_args()
     asyncio.run(_guided(args.plan))
@@ -116,7 +116,7 @@ async def _simulation(args) -> None:
 
 def simulation_main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run cases locally: Converse against a Converse simulated user")
+        description="Run cases locally: Dialt against a Dialt simulated user")
     parser.add_argument("paths", type=Path, nargs="+", metavar="CASE_OR_DIR")
     parser.add_argument("--modality", choices=["text", "voice"], default="text")
     parser.add_argument("--report-base-url")
@@ -161,7 +161,7 @@ def evals_main() -> None:
     push_cmd.add_argument("--modality", choices=["text", "voice"], default="text")
     push_cmd.add_argument("--repetitions", type=int, default=1)
     push_cmd.add_argument("--wait", action="store_true", help="poll until the run finishes")
-    push_cmd.add_argument("--base-url", default=os.environ.get("CONVERSE_EVALS_URL", DEFAULT_EVALS_URL))
+    push_cmd.add_argument("--base-url", default=os.environ.get("DIALT_EVALS_URL", DEFAULT_EVALS_URL))
     args = parser.parse_args()
     client = EvalsClient(_api_key(), base_url=args.base_url)
     try:

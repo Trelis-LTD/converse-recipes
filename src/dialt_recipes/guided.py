@@ -3,16 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import AsyncIterator
 
-from converse_sdk import ConverseMode, ConverseSession, SessionEvent
+from dialt import DialtMode, DialtSession, SessionEvent
 
 from .conversation_plan import ConversationPlan
 
 
 @dataclass
 class GuidedAssistant:
-    """A thin application controller around one ordinary Converse session."""
+    """A thin application controller around one ordinary Dialt session."""
 
-    session: ConverseSession
+    session: DialtSession
     plan: ConversationPlan
     modality: str
     answers: dict[str, str] = field(default_factory=dict)
@@ -21,9 +21,9 @@ class GuidedAssistant:
     async def connect(cls, url: str, api_key: str, plan: ConversationPlan, *,
                       modality: str = "text", session_id: str | None = None,
                       greeting: str | bool | None = None) -> "GuidedAssistant":
-        session = await ConverseSession.connect(
+        session = await DialtSession.connect(
             url, api_key=api_key, session_id=session_id,
-            mode=ConverseMode(
+            mode=DialtMode(
                 modality=modality, instructions=plan.instructions(), tools=[plan.tool()],
                 greeting=greeting,
             ),

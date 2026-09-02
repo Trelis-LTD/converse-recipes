@@ -8,7 +8,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from converse_recipes import SimulationCase, run_simulation
+from dialt_recipes import SimulationCase, run_simulation
 
 from workflow import QualificationState
 
@@ -34,10 +34,10 @@ async def main() -> None:
         ),
     )
     report = await run_simulation(
-        os.environ.get("CONVERSE_URL", "wss://dialt.com/ws"),
-        os.environ["CONVERSE_API_KEY"],
+        os.environ.get("DIALT_URL", "wss://dialt.com/ws"),
+        os.environ["DIALT_API_KEY"],
         case,
-        modality=os.environ.get("CONVERSE_MODALITY", "text"),
+        modality=os.environ.get("DIALT_MODALITY", "text"),
     )
     missing = [field for field in state.required_fields if field not in state.answers]
     application_check = {

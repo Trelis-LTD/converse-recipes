@@ -1,4 +1,4 @@
-name: Live Converse smoke
+name: Live Dialt smoke
 
 on:
   workflow_dispatch:
@@ -26,8 +26,8 @@ jobs:
           cache-dependency-glob: uv.lock
           prune-cache: true
       - run: uv sync --frozen
-      - name: Run two ordinary Converse sessions
+      - name: Run two ordinary Dialt sessions
         env:
-          CONVERSE_API_KEY: ${{ secrets.CONVERSE_API_KEY }}
-          CONVERSE_URL: ${{ vars.CONVERSE_URL || 'wss://converse.trelis.com/ws' }}
-        run: uv run converse-sim examples/simulations/appointment_booking.json --modality "${{ inputs.modality }}"
+          DIALT_API_KEY: ${{ secrets.DIALT_API_KEY }}
+          DIALT_URL: ${{ vars.DIALT_URL || 'wss://dialt.com/ws' }}
+        run: uv run dialt-sim examples/simulations/appointment_booking.json --modality "${{ inputs.modality }}"

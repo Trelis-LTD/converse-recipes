@@ -1,4 +1,4 @@
-"""Application-level recipes composed from the public Converse SDK."""
+"""Application-level recipes composed from the public Dialt SDK."""
 
 from .conversation_plan import ConversationPlan, PlanField
 from .guided import GuidedAssistant

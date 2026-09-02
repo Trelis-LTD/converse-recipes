@@ -100,11 +100,11 @@ def test_interruption_preserves_graceful_drain_and_hard_clear() -> None:
 
 
 def test_twilio_signatures_use_exact_http_and_websocket_urls(monkeypatch) -> None:
-    monkeypatch.setenv("CONVERSE_API_KEY", "ck_test")
+    monkeypatch.setenv("DIALT_API_KEY", "ck_test")
     monkeypatch.setenv("TWILIO_AUTH_TOKEN", "twilio-test-token")
     monkeypatch.setenv("PUBLIC_BASE_URL", "https://voice.example.com")
     get_settings.cache_clear()
-    monkeypatch.delenv("CONVERSE_VOICE", raising=False)
+    monkeypatch.delenv("DIALT_VOICE", raising=False)
     get_settings.cache_clear()
     settings = get_settings()
     assert settings.voice is None
@@ -123,7 +123,7 @@ def test_twilio_signatures_use_exact_http_and_websocket_urls(monkeypatch) -> Non
 
 
 def _configure_handoff(monkeypatch) -> None:
-    monkeypatch.setenv("CONVERSE_API_KEY", "ck_test")
+    monkeypatch.setenv("DIALT_API_KEY", "ck_test")
     monkeypatch.setenv("TWILIO_AUTH_TOKEN", "twilio-test-token")
     monkeypatch.setenv("TWILIO_ACCOUNT_SID", "AC" + "1" * 32)
     monkeypatch.setenv("TWILIO_HUMAN_HANDOFF_URL", "https://customer.example/handoff")
@@ -203,5 +203,5 @@ def test_unknown_tool_still_fails_closed(monkeypatch) -> None:
 def test_public_env_template_excludes_internal_smoke_credentials() -> None:
     env_template = Path(__file__).with_name("env.example").read_text()
     assert "TWILIO_BROWSER_" not in env_template
-    assert "CONVERSE_SITE_ORIGIN" not in env_template
+    assert "DIALT_SITE_ORIGIN" not in env_template
     assert env_template.count("TWILIO_ACCOUNT_SID") == 1

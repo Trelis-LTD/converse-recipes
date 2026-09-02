@@ -1,4 +1,4 @@
-import { ConverseClient } from 'https://cdn.jsdelivr.net/gh/dialt-ai/dialt@aa92044041df841b8f9a92b3e100f7f385174e6c/sdk/browser/src/index.js';
+import { DialtClient } from 'https://cdn.jsdelivr.net/gh/dialt-ai/dialt@c22338226979ed3bf9d5ce6413bf3477ab8d0feb/sdk/browser/src/index.js';
 
 const plan = await fetch('./plan.json').then(response => response.json());
 const answers = {};
@@ -18,7 +18,7 @@ render();
 
 document.querySelector('#start').onclick = async () => {
   const modality = document.querySelector('#modality').value;
-  client = new ConverseClient({url:document.querySelector('#url').value,sessionId:document.querySelector('#session').value,apiKey:document.querySelector('#key').value,mode:{kind:'converse',modality,instructions,tools:[tool],greeting:'Tell me about your role and the last urgent customer escalation you handled.'}});
+  client = new DialtClient({url:document.querySelector('#url').value,sessionId:document.querySelector('#session').value,apiKey:document.querySelector('#key').value,mode:{kind:'dialt',modality,instructions,tools:[tool],greeting:'Tell me about your role and the last urgent customer escalation you handled.'}});
   client.addEventListener('asr', event => addTurn('you', event.detail.text));
   client.addEventListener('utterance', event => addTurn('assistant', event.detail.text));
   client.addEventListener('tool_call', event => {

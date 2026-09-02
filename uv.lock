@@ -38,25 +38,11 @@ wheels = [
 ]
 
 [[package]]
-name = "converse-sdk"
-version = "0.14.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "websockets" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/50/6c/f136ba0d6aae78a034add70d2d859067e4379ba83b26dba20cd2d07f21c5/converse_sdk-0.14.0.tar.gz", hash = "sha256:a2d5fe42a9148aa0c4ab58ea4c30dac1288f293d66f438b957281f71e9cac979", size = 38861, upload-time = "2026-08-30T16:47:24.099Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ba/b0/2746117190fb6733ec29133501d8782fdecd570fea40509f50331f8212b8/converse_sdk-0.14.0-py3-none-any.whl", hash = "sha256:0d9fa4a180c208951168e29bd5cc18102ec9b97e332678a7bb42ea8046e4652c", size = 33551, upload-time = "2026-08-30T16:47:23.311Z" },
-]
-
-[[package]]
 name = "dialt-recipes"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
-    { name = "converse-sdk" },
+    { name = "dialt-sdk" },
     { name = "httpx" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -71,7 +57,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "converse-sdk", specifier = ">=0.14.0" },
+    { name = "dialt-sdk", specifier = ">=0.17.0" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "python-dotenv", specifier = ">=1.0" },
@@ -80,6 +66,20 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8.0" }]
+
+[[package]]
+name = "dialt-sdk"
+version = "0.17.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/13/53/9582e8f18ecbfa2aa7aa693f14141a78b3505dda941bc48b62677aaef6b8/dialt_sdk-0.17.0.tar.gz", hash = "sha256:5fb4196a0ae01664d31c203325acf456f342b6c09f8de99a4ab11f28adabdc1a", size = 39770, upload-time = "2026-09-02T20:57:28.808Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3c/2d/09e869eac53e4bc6ba9a3fcd3c4e5296d331ff69b28b0f9a64987387d145/dialt_sdk-0.17.0-py3-none-any.whl", hash = "sha256:05f34feee32488de388af3d2d0cb3523bc7a362b04df740b3b27d9197dab8e46", size = 33950, upload-time = "2026-09-02T20:57:27.773Z" },
+]
 
 [[package]]
 name = "h11"
