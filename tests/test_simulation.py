@@ -36,7 +36,7 @@ def test_case_uses_the_hosted_document_shape():
         SimulationCase.from_dict({"name": "no starter"})
     assert case.target_options["end_call"] is True
     assert "end_call" not in SimulationCase.from_dict({"name": "n", "starter": "hi"}).target_options
-    with pytest.raises(ValueError, match="target.end_call must be true or false"):
+    with pytest.raises(ValueError, match="target.end_call must be true, false"):
         SimulationCase.from_dict({"name": "n", "starter": "hi", "target": {"end_call": "no"}})
 
 
@@ -56,8 +56,82 @@ class _FakeSession:
     async def send_tool_result(self, *_args, **_kwargs):
         pass
 
+    async def send_client_event(self, event, **fields):
+        self.client_events.append((event, fields))
+
     async def close(self):
         pass
+
+
+def test_voice_mics_run_for_the_whole_call_and_answer_a_barge_like_a_client(monkeypatch):
+    """Both virtual mics start before anyone speaks and have no turn API for the runner to
+    call. This side's `interrupted` is answered with the mic's playback_stopped report on this
+    side's own socket, `canceled` reaches the mic, and the broker's corrected utterance (the
+    barged reply re-truncated to what was heard) replaces the transcript entry instead of
+    adding a second turn."""
+    from types import SimpleNamespace
+    target = _FakeSession([
+        SimpleNamespace(type="utterance", t_ms=1,
+                        data={"text": "I can process the refund [interrupted]", "turn_id": "turn-2"}),
+        SimpleNamespace(type="interrupted", t_ms=2,
+                        data={"turn_id": "turn-2", "barge_seq": 1, "clear": True}),
+        SimpleNamespace(type="utterance", t_ms=3,
+                        data={"text": "I can process the [interrupted]", "turn_id": "turn-2",
+                              "corrected": True, "barge_seq": 1}),
+        SimpleNamespace(type="canceled", t_ms=4, data={"turn_id": "turn-3"}),
+        SimpleNamespace(type="session_end_requested", t_ms=5, data={}),
+    ])
+    simulator = _FakeSession([
+        SimpleNamespace(type="working", t_ms=2, data={"active": True}),
+        SimpleNamespace(type="done", t_ms=3, data={"turn_id": "turn-1"}),
+    ])
+    target.client_events, simulator.client_events = [], []
+    sessions = iter([target, simulator])
+    relays = []
+
+    class RelaySpy:
+        def __init__(self, destination, **_kwargs):
+            self.destination = destination
+            self.started = False
+            self.interrupts = []
+            self.cancels = 0
+            relays.append(self)
+
+        def start(self):
+            self.started = True
+
+        async def audio(self, _chunk):
+            pass
+
+        def interrupted(self, event):
+            self.interrupts.append(event)
+            return {"remaining_ms": 0, "discarded_ms": 480, "barge_seq": event["barge_seq"]}
+
+        def canceled(self):
+            self.cancels += 1
+
+        async def close(self):
+            pass
+
+    async def connect(*_args, **_kwargs):
+        return next(sessions)
+
+    monkeypatch.setattr("dialt_recipes.simulation.DialtSession.connect", connect)
+    monkeypatch.setattr("dialt_recipes.simulation.VoiceTurnRelay", RelaySpy)
+    case = SimulationCase.from_dict({
+        "name": "n", "starter": "Hello", "limits": {"timeout_s": 10, "max_turns": 2}})
+    report = asyncio.run(run_simulation("ws://test", "key", case, modality="voice"))
+
+    assert report.termination_reason == "completed"
+    assert [relay.destination for relay in relays] == [simulator, target]
+    assert [relay.started for relay in relays] == [True, True]
+    assert [relay.interrupts for relay in relays] == [
+        [{"turn_id": "turn-2", "barge_seq": 1, "clear": True}], []]
+    assert [relay.cancels for relay in relays] == [1, 0]
+    assert target.client_events == [
+        ("playback_stopped", {"remaining_ms": 0, "discarded_ms": 480, "barge_seq": 1})]
+    assert report.transcript == [
+        {"role": "assistant", "text": "I can process the [interrupted]", "turn": "turn-2"}]
 
 
 def test_end_call_is_a_recorded_tool_call_and_the_simulator_always_has_it(monkeypatch):

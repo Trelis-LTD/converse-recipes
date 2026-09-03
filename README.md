@@ -68,8 +68,9 @@ has it. Either call is recorded as a tool call named `end_call`, so `completed` 
 ended the call and `simulator_ended` means the simulated user did.
 
 Run a case, or every case in a directory, locally. Two Dialt sessions talk to each other: the
-target agent and a simulated caller. Text forwards committed utterances; voice cross-pipes the
-audio between the sessions and never touches a speaker or microphone.
+target agent and a simulated caller. Text forwards committed utterances; voice gives each session
+a virtual microphone that streams for the whole call (the other side's audio at real time, line
+noise in between, exactly as a phone line would) and never touches a speaker or microphone.
 
 ```sh
 uv run dialt-sim examples/simulations/ --modality text

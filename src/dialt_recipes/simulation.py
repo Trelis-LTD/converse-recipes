@@ -225,8 +225,10 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
                          modality: str = "text") -> SimulationReport:
     """Run target and simulated user as two ordinary Dialt sessions.
 
-    In voice mode, received Float32 audio is paced by the service and immediately sent to the
-    other session. It is never opened on a sound device or written to an output file.
+    In voice mode each session gets a virtual microphone into the other: a paced stream that
+    runs for the whole call, carrying the other side's audio at real time and line noise in
+    between, so each broker endpoints on trailing silence as on a phone line. Audio is never
+    opened on a sound device or written to an output file.
     """
     if modality not in {"text", "voice"}:
         raise ValueError("modality must be text or voice")
@@ -294,13 +296,15 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
         "simulator": TextTurnRelay(
             lambda text: forward_text(target, text), on_error=relay_failed),
     }
-    voice_relays = {
+    # Each side's virtual microphone into the other session: a paced stream that runs for the
+    # whole attempt, like a phone line, so each broker's own endpointer closes turns on trailing
+    # silence. It knows nothing about turns (see the SDK README, "Relaying two sessions").
+    voice_relays = {} if modality != "voice" else {
         "target": VoiceTurnRelay(simulator, on_error=relay_failed),
         "simulator": VoiceTurnRelay(target, on_error=relay_failed),
     }
 
-    async def consume(side: str, source: DialtSession,
-                      destination: DialtSession) -> None:
+    async def consume(side: str, source: DialtSession) -> None:
         try:
             async for event in source.events():
                 last_activity["at"] = time.monotonic()
@@ -309,9 +313,6 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
                         "side": side, "type": event.type, "t_ms": event.t_ms, **event.data,
                     })
                 if event.type == "asr":
-                    if modality == "voice":
-                        incoming_side = "simulator" if side == "target" else "target"
-                        voice_relays[incoming_side].input_committed()
                     if side == "target":
                         report.transcript.append({
                             "role": "user", "text": event.data.get("text", ""),
@@ -322,6 +323,13 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
                     entry = {"role": "assistant", "text": text}
                     if root is not None:
                         entry["turn"] = root
+                    if event.data.get("corrected"):
+                        # The broker re-truncated a barged reply to what was heard, answering
+                        # the mic's playback_stopped report: same turn, replaced, not a new one.
+                        last = report.transcript[-1] if report.transcript else None
+                        if last and last.get("role") == "assistant" and last.get("turn") == root:
+                            report.transcript[-1] = entry
+                        continue
                     report.transcript.append(entry)
                     last_speaker["side"] = "target"
                     if modality == "text":
@@ -338,19 +346,19 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
                     last_speaker["side"] = "simulator"
                     if modality == "text" and text:
                         relays[side].utterance(text)
-                elif event.type == "working":
-                    active = bool(event.data.get("active"))
-                    if modality == "text":
-                        relays[side].working(active)
-                    else:
-                        voice_relays[side].working(active)
+                elif event.type == "working" and modality == "text":
+                    relays[side].working(bool(event.data.get("active")))
                 elif event.type == "audio" and modality == "voice" and event.audio is not None:
                     await voice_relays[side].audio(event.audio)
-                elif event.type == "done":
-                    if modality == "text":
-                        relays[side].done()
-                    else:
-                        voice_relays[side].done()
+                elif event.type == "done" and modality == "text":
+                    relays[side].done()
+                elif event.type == "interrupted" and modality == "voice":
+                    # This side's reply was barged: report how much of its audio the other side
+                    # never heard, so its committed text is truncated to match.
+                    await source.send_client_event(
+                        "playback_stopped", **voice_relays[side].interrupted(event.data))
+                elif event.type == "canceled" and modality == "voice":
+                    voice_relays[side].canceled()
                 elif side == "target" and event.type == "tool_call":
                     call_id = str(event.data.get("id") or "")
                     tool_name = str(event.data.get("name") or "")
@@ -407,13 +415,15 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
                 stop.set()
 
     tasks = [
-        asyncio.create_task(consume("target", target, simulator)),
-        asyncio.create_task(consume("simulator", simulator, target)),
+        asyncio.create_task(consume("target", target)),
+        asyncio.create_task(consume("simulator", simulator)),
         asyncio.create_task(watchdog()),
     ]
     try:
         if modality == "text":
             await target.send_text(case.starter)
+        for mic in voice_relays.values():
+            mic.start()          # both lines are live from the first moment, before anyone speaks
         try:
             await asyncio.wait_for(stop.wait(), timeout=case.timeout_s)
         except TimeoutError:
