@@ -183,6 +183,15 @@ def evaluate_checks(case: SimulationCase, report: SimulationReport) -> list[dict
     return results
 
 
+def target_end_call(options: dict) -> dict:
+    """DialtMode kwargs for `target.end_call`: true or false, or {"when": "<condition>"}, which
+    keeps the tool and states the condition, the same three forms the hosted evals accept."""
+    value = options.get("end_call", True)
+    if isinstance(value, dict):
+        return {"end_call": True, "end_call_when": value["when"]}
+    return {"end_call": bool(value)}
+
+
 async def _fixture_result(fixtures: dict[str, Fixture], name: str, args: dict[str, Any],
                           state: dict[str, dict[str, str]] | None = None) -> tuple[Any, str, bool]:
     """Answer a target tool call: a Python callable, a field_store, or a fixed value.
@@ -196,9 +205,14 @@ async def _fixture_result(fixtures: dict[str, Fixture], name: str, args: dict[st
                 "failed", False)
     value = fixtures[name]
     if callable(value):
-        value = value(args)
-        if inspect.isawaitable(value):
-            value = await value
+        try:
+            value = value(args)
+            if inspect.isawaitable(value):
+                value = await value
+        except Exception as exc:  # noqa: BLE001 - an application rejection is a tool failure
+            # The callback rejected the call (an incomplete qualification, a bad value). That is
+            # a failed tool result for the model to work with, not the end of the run.
+            return {"error": str(exc) or type(exc).__name__}, "failed", False
         return value, "succeeded", True
     if isinstance(value, dict) and value.get("fixture_type") == "field_store":
         state = state if state is not None else {}
@@ -241,7 +255,7 @@ async def run_simulation(url: str, api_key: str, case: SimulationCase, *,
             tools=list(case.target_tools) or None, greeting=False,
             voice=case.target_options.get("voice"),
             web_search=bool(case.target_options.get("web_search", False)),
-            end_call=bool(case.target_options.get("end_call", True)),
+            **target_end_call(case.target_options),
             silence_nudge_s=SIMULATION_SILENCE_NUDGE_S if modality == "voice" else None,
             silence_end_s=SIMULATION_SILENCE_END_S if modality == "voice" else None,
         ),

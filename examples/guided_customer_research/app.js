@@ -1,4 +1,4 @@
-import { DialtClient } from 'https://cdn.jsdelivr.net/gh/dialt-ai/dialt@c22338226979ed3bf9d5ce6413bf3477ab8d0feb/sdk/browser/src/index.js';
+import { DialtClient } from 'https://cdn.jsdelivr.net/npm/@dialt/sdk@0.26.0/src/index.js';
 
 const plan = await fetch('./plan.json').then(response => response.json());
 const answers = {};

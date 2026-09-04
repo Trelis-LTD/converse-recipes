@@ -24,11 +24,6 @@ uv run pytest -q
 
 ## Install
 
-Version 0.2 uses the `dialt_recipes` import namespace, `DIALT_*` environment names, and
-`dialt-guided`, `dialt-sim`, and `dialt-evals` commands. The pre-0.2 `converse_recipes`
-namespace and legacy names were removed rather than kept as parallel compatibility paths.
-
-
 ```sh
 uv sync
 cp .env.example .env
@@ -63,8 +58,9 @@ and `limits`. [`examples/simulations/appointment_booking.json`](examples/simulat
 is a complete one. Field reference: the [evals guide](https://dialt.com/docs/api/evals/).
 
 The agent ends a call by calling the managed `end_call` tool, which `target.end_call` (default
-true) gives it; set it to false for an agent that must never hang up. The simulated user always
-has it. Either call is recorded as a tool call named `end_call`, so `completed` means the agent
+true) gives it; set it to false for an agent that must never hang up, or to
+`{"when": "the caller confirms the booking is complete"}` to state the condition in the
+agent's own terms. The simulated user always has it. Either call is recorded as a tool call named `end_call`, so `completed` means the agent
 ended the call and `simulator_ended` means the simulated user did.
 
 Run a case, or every case in a directory, locally. Two Dialt sessions talk to each other: the

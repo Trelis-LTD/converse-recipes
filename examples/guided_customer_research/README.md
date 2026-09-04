@@ -2,8 +2,8 @@
 
 This assistant investigates how small support teams handle urgent escalations. The plan asks for
 evidence, not a questionnaire script: Dialt chooses the order, follows useful threads and
-clarifies ambiguity. `record_plan_field` is an ordinary client tool, so the application—not the
-prompt—owns completion state.
+clarifies ambiguity. `record_plan_field` is an ordinary client tool, so the application, not the
+prompt, owns completion state.
 
 The terminal example is the quickest way to try it:
 

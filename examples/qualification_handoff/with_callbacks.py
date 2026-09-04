@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from dialt_recipes import SimulationCase, run_simulation
 
-from workflow import QualificationState
+from workflow import QualificationState, spoken_reference_pattern
 
 
 async def main() -> None:
@@ -26,8 +26,8 @@ async def main() -> None:
             "start_handoff": state.start_handoff,
         },
         checks=tuple(
-            {**check, "value": state.handoff_reference}
-            if check.get("type") == "contains" and check.get("value") == "HX-2048"
+            {**check, "value": spoken_reference_pattern(state.handoff_reference)}
+            if check.get("type") == "regex" and "2048" in check.get("value", "")
             else check
             for check in case.checks
             if check.get("type") != "fixture_complete"
