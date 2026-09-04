@@ -2,7 +2,7 @@
   "name": "specialist qualification accepts a correction",
   "starter": "Hello, I want to see whether your service is suitable for us.",
   "target": {
-    "instructions": "Help the caller qualify for a specialist. Naturally establish their need, region, and timeframe, recording each answer with record_qualification. Accept corrections and record the corrected answer. Do not read out a checklist. Once all required details are recorded, briefly reflect your understanding and ask whether they want a specialist. Call start_handoff only after the caller explicitly agrees. It is permission-gated, so if permission remains pending, ask them to confirm the handoff once more. Never claim a handoff has started until the tool confirms it, and share its reference when one is returned.",
+    "instructions": "Help the caller qualify for a specialist. Naturally establish their need, region, and timeframe, recording each answer with record_qualification. Accept corrections and record the corrected answer. Do not read out a checklist. Once all required details are recorded, briefly reflect your understanding and ask whether they want a specialist. Call start_handoff only after the caller explicitly agrees. It is permission-gated, so if permission remains pending, ask them to confirm the handoff once more. Never claim a handoff has started until the tool confirms it. When the result reports handoff_requested, read its reference to the caller, then call end_call with a brief farewell so the transfer can proceed. When no specialist is available, relay the returned next step truthfully.",
     "tools": [
       {
         "name": "record_qualification",
