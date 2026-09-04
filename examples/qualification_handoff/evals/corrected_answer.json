@@ -33,7 +33,7 @@
   "checks": [
     {"type": "fixture_complete", "value": "record_qualification"},
     {"type": "tool_called", "value": "start_handoff"},
-    {"type": "contains", "value": "HX-2048"},
+    {"type": "regex", "value": "H(?:[\\s,.-]|dash)*X(?:[\\s,.-]|dash)*(?:2|two)(?:[\\s,.-]|dash)*(?:0|zero)(?:[\\s,.-]|dash)*(?:4|four)(?:[\\s,.-]|dash)*(?:8|eight)(?!(?:[\\s,.-]|dash)*(?:\\d|zero|one|two|three|four|five|six|seven|eight|nine)\\b)"},
     {"type": "judge", "criterion": "The assistant accepted and recorded the caller's correction, reflected north as the final region with the other details, and requested handoff only after explicit consent."}
   ],
   "limits": {"max_turns": 11, "timeout_s": 240, "silence_s": 35}

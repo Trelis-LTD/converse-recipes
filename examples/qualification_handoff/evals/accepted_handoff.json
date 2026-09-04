@@ -53,7 +53,7 @@
   "checks": [
     {"type": "fixture_complete", "value": "record_qualification"},
     {"type": "tool_called", "value": "start_handoff"},
-    {"type": "contains", "value": "HX-2048", "name": "the handoff reference reaches the caller"},
+    {"type": "regex", "value": "H(?:[\\s,.-]|dash)*X(?:[\\s,.-]|dash)*(?:2|two)(?:[\\s,.-]|dash)*(?:0|zero)(?:[\\s,.-]|dash)*(?:4|four)(?:[\\s,.-]|dash)*(?:8|eight)(?!(?:[\\s,.-]|dash)*(?:\\d|zero|one|two|three|four|five|six|seven|eight|nine)\\b)", "name": "the handoff reference reaches the caller"},
     {"type": "judge", "criterion": "The assistant collected and reflected the need, region, and timeframe, obtained explicit consent, then requested the handoff and reported only the confirmed result."}
   ],
   "limits": {"max_turns": 10, "timeout_s": 240, "silence_s": 35}

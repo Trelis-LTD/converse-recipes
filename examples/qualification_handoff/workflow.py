@@ -1,7 +1,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import Any
+
+_DIGIT_WORDS = {"0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
+                "5": "five", "6": "six", "7": "seven", "8": "eight", "9": "nine"}
+_SPOKEN_GAP = r"(?:[\s,.-]|dash)*"
+
+
+def spoken_reference_pattern(reference: str) -> str:
+    """A regex that matches `reference` as an agent reads it aloud: characters separated by
+    spaces, hyphens, commas or the word "dash", and digits as numerals or words. A longer
+    digit run does not match, so a different reference cannot pass."""
+    parts = []
+    for ch in reference.upper():
+        if ch.isdigit():
+            parts.append(f"(?:{ch}|{_DIGIT_WORDS[ch]})")
+        elif ch.isalnum():
+            parts.append(re.escape(ch))
+    tail_digit = r"(?:\d|" + "|".join(_DIGIT_WORDS.values()) + r")\b"
+    return _SPOKEN_GAP.join(parts) + f"(?!{_SPOKEN_GAP}{tail_digit})"
 
 
 @dataclass

@@ -309,3 +309,26 @@ def test_dialt_sim_checks_voice_starters_before_running(tmp_path):
     assert collect_cases([tmp_path], "text")[0].name == "long"
     with pytest.raises(SystemExit, match="300 characters"):
         collect_cases([tmp_path], "voice")
+
+
+def test_target_end_call_keeps_the_stated_condition() -> None:
+    from dialt_recipes.simulation import target_end_call
+
+    assert target_end_call({}) == {"end_call": True}
+    assert target_end_call({"end_call": False}) == {"end_call": False}
+    assert target_end_call({"end_call": {"when": "the caller says goodbye"}}) == {
+        "end_call": True, "end_call_when": "the caller says goodbye"}
+
+
+def test_callable_fixture_rejection_is_a_failed_tool_result() -> None:
+    """A callback that raises (an incomplete qualification) is a failed result the model can
+    work with, not a connection error that ends the run."""
+    import asyncio
+    from dialt_recipes.simulation import _fixture_result
+
+    def reject(args):
+        raise ValueError("qualification incomplete")
+
+    result, outcome, verified = asyncio.run(_fixture_result({"start": reject}, "start", {}, None))
+    assert result == {"error": "qualification incomplete"}
+    assert (outcome, verified) == ("failed", False)

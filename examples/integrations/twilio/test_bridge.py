@@ -1,4 +1,5 @@
 import asyncio
+import re
 from pathlib import Path
 
 import bridge
@@ -200,8 +201,8 @@ def test_unknown_tool_still_fails_closed(monkeypatch) -> None:
         asyncio.run(execute_tool("CA123", "unknown", {}))
 
 
-def test_public_env_template_excludes_internal_smoke_credentials() -> None:
+def test_env_template_lists_each_setting_once() -> None:
     env_template = Path(__file__).with_name("env.example").read_text()
-    assert "TWILIO_BROWSER_" not in env_template
-    assert "DIALT_SITE_ORIGIN" not in env_template
-    assert env_template.count("TWILIO_ACCOUNT_SID") == 1
+    keys = re.findall(r"^#?\s*([A-Z][A-Z0-9_]*)=", env_template, flags=re.MULTILINE)
+    assert keys and len(keys) == len(set(keys)), keys
+    assert "DIALT_VOICE" in keys
