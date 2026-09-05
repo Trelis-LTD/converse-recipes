@@ -5,6 +5,7 @@ description = "Inbound Twilio Media Streams reference bridge for Dialt."
 requires-python = ">=3.11"
 dependencies = [
     "dialt-sdk>=0.20.1",
+    "dialt-recipes @ git+https://github.com/dialt-ai/dialt-recipes.git",
     "fastapi>=0.115",
     "numpy>=1.26",
     "python-multipart>=0.0.18",
@@ -15,3 +16,8 @@ dependencies = [
 
 [dependency-groups]
 dev = ["httpx>=0.28", "pytest>=8.3"]
+
+[tool.uv.sources]
+# Inside this repository the example runs against the checkout; a standalone copy resolves the
+# git dependency above instead.
+dialt-recipes = { path = "../../..", editable = true }
