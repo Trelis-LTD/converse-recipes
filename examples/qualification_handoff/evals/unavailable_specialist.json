@@ -2,12 +2,32 @@
   "name": "specialist qualification with unavailable handoff",
   "starter": "Hello, can you help me work out the next step?",
   "target": {
-    "instructions": "Help the caller qualify for a specialist. Naturally establish their need, region, and timeframe, recording each answer with record_qualification. Accept corrections and record the corrected answer. Do not read out a checklist. Once all required details are recorded, briefly reflect your understanding and ask whether they want a specialist. Call start_handoff only after the caller explicitly agrees. It is permission-gated, so if permission remains pending, ask them to confirm the handoff once more. Never claim a handoff has started until the tool confirms it. If no specialist is available, explain the returned next step truthfully.",
+    "instructions": "Help the caller qualify for a specialist. Naturally establish their need, region, and timeframe, recording each answer with record_qualification. Accept corrections and record the corrected answer. Do not read out a checklist. Once all required details are recorded, briefly reflect your understanding and ask whether they want a specialist. Ask whether they want a specialist and call start_handoff only after the caller clearly agrees. Never say a handoff has started until the tool result confirms it. If no specialist is available, explain the returned next step truthfully.",
     "tools": [
       {
         "name": "record_qualification",
         "description": "Record or correct one qualification answer after the caller provides it.",
-        "parameters": {"type": "object", "properties": {"field": {"type": "string", "enum": ["need", "region", "timeframe"]}, "value": {"type": "string"}}, "required": ["field", "value"], "additionalProperties": false},
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "field": {
+              "type": "string",
+              "enum": [
+                "need",
+                "region",
+                "timeframe"
+              ]
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "field",
+            "value"
+          ],
+          "additionalProperties": false
+        },
         "read_only": false,
         "expected_duration": "instant",
         "status_label": "qualification"
@@ -15,26 +35,74 @@
       {
         "name": "start_handoff",
         "description": "Request a specialist handoff after qualification is complete and the caller explicitly agrees.",
-        "parameters": {"type": "object", "properties": {"summary": {"type": "string"}}, "required": ["summary"], "additionalProperties": false},
-        "requires_permission": true,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "summary"
+          ],
+          "additionalProperties": false
+        },
         "expected_duration": "seconds",
         "status_label": "specialist handoff"
       }
     ],
-    "end_call": true
+    "end_call": false
   },
   "simulator": {
     "instructions": "You are Casey, looking to expand an existing customer support setup in the east region within two weeks. Stay in the caller role and reveal those facts naturally when asked. Explicitly agree when offered a specialist, and confirm again if permission is requested. Do not invent results or pretend a specialist answered. If told none is available and given a follow-up timeframe, acknowledge it, thank the assistant, say goodbye, and end the conversation."
   },
   "fixtures": {
-    "record_qualification": {"fixture_type": "field_store", "field_arg": "field", "value_arg": "value", "fields": [{"key": "need"}, {"key": "region"}, {"key": "timeframe"}]},
-    "start_handoff": {"result": {"handoff_requested": false, "reason": "no_specialist_available", "follow_up": "within one business day"}}
+    "record_qualification": {
+      "fixture_type": "field_store",
+      "field_arg": "field",
+      "value_arg": "value",
+      "fields": [
+        {
+          "key": "need"
+        },
+        {
+          "key": "region"
+        },
+        {
+          "key": "timeframe"
+        }
+      ]
+    },
+    "start_handoff": {
+      "result": {
+        "handoff_requested": false,
+        "reason": "no_specialist_available",
+        "follow_up": "within one business day"
+      }
+    }
   },
   "checks": [
-    {"type": "fixture_complete", "value": "record_qualification"},
-    {"type": "tool_called", "value": "start_handoff"},
-    {"type": "contains", "value": "business day", "name": "the returned follow-up timing reaches the caller"},
-    {"type": "judge", "criterion": "The assistant truthfully explained that no specialist was connected and gave the returned follow-up timing without claiming success."}
+    {
+      "type": "fixture_complete",
+      "value": "record_qualification"
+    },
+    {
+      "type": "tool_called",
+      "value": "start_handoff"
+    },
+    {
+      "type": "contains",
+      "value": "business day",
+      "name": "the returned follow-up timing reaches the caller"
+    },
+    {
+      "type": "judge",
+      "criterion": "The assistant truthfully explained that no specialist was connected and gave the returned follow-up timing without claiming success."
+    }
   ],
-  "limits": {"max_turns": 10, "timeout_s": 240, "silence_s": 35}
+  "limits": {
+    "max_turns": 10,
+    "timeout_s": 240,
+    "silence_s": 35
+  }
 }

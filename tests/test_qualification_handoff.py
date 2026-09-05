@@ -35,7 +35,8 @@ def test_all_qualification_handoff_cases_use_the_hosted_shape() -> None:
             "record_qualification",
             "start_handoff",
         ]
-        assert case.target_tools[1]["requires_permission"] is True
+        assert "requires_permission" not in case.target_tools[1]
+        assert case.target_options.get("end_call") is False
         assert case.fixtures["record_qualification"]["fixture_type"] == "field_store"
 
 

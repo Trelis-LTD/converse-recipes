@@ -2,12 +2,32 @@
   "name": "specialist qualification with declined handoff",
   "starter": "Hi, I have a few questions about whether this could work for us.",
   "target": {
-    "instructions": "Help the caller qualify for a specialist. Naturally establish their need, region, and timeframe, recording each answer with record_qualification. Accept corrections and record the corrected answer. Do not read out a checklist. Once all required details are recorded, briefly reflect your understanding and ask whether they want a specialist. Call start_handoff only after the caller explicitly agrees. It is permission-gated, so if permission remains pending, ask them to confirm the handoff once more. Never claim a handoff has started until the tool confirms it. When the result reports handoff_requested, read its reference to the caller, then call end_call with a brief farewell so the transfer can proceed. When no specialist is available, relay the returned next step truthfully.",
+    "instructions": "Help the caller qualify for a specialist. Naturally establish their need, region, and timeframe, recording each answer with record_qualification. Accept corrections and record the corrected answer. Do not read out a checklist. Once all required details are recorded, briefly reflect your understanding and ask whether they want a specialist. Ask whether they want a specialist and call start_handoff only after the caller clearly agrees. Never say a handoff has started until the tool result confirms it. When the result reports handoff_requested, read its reference to the caller, then say goodbye; the call ends on the host's side. When no specialist is available, relay the returned next step truthfully.",
     "tools": [
       {
         "name": "record_qualification",
         "description": "Record or correct one qualification answer after the caller provides it.",
-        "parameters": {"type": "object", "properties": {"field": {"type": "string", "enum": ["need", "region", "timeframe"]}, "value": {"type": "string"}}, "required": ["field", "value"], "additionalProperties": false},
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "field": {
+              "type": "string",
+              "enum": [
+                "need",
+                "region",
+                "timeframe"
+              ]
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "field",
+            "value"
+          ],
+          "additionalProperties": false
+        },
         "read_only": false,
         "expected_duration": "instant",
         "status_label": "qualification"
@@ -15,25 +35,69 @@
       {
         "name": "start_handoff",
         "description": "Request a specialist handoff after qualification is complete and the caller explicitly agrees.",
-        "parameters": {"type": "object", "properties": {"summary": {"type": "string"}}, "required": ["summary"], "additionalProperties": false},
-        "requires_permission": true,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "summary"
+          ],
+          "additionalProperties": false
+        },
         "expected_duration": "seconds",
         "status_label": "specialist handoff"
       }
     ],
-    "end_call": true
+    "end_call": false
   },
   "simulator": {
     "instructions": "You are Taylor, asking about a service for a five-person sales team in the west region, needed later this year. Stay in the caller role and reveal those facts naturally when asked. When offered a specialist, politely decline because you only wanted initial information. Do not later change your mind, invent tool results, or claim a handoff occurred. After the assistant acknowledges your choice, thank them, say goodbye, and end the conversation."
   },
   "fixtures": {
-    "record_qualification": {"fixture_type": "field_store", "field_arg": "field", "value_arg": "value", "fields": [{"key": "need"}, {"key": "region"}, {"key": "timeframe"}]},
-    "start_handoff": {"result": {"handoff_requested": true, "handoff_reference": "HX-2048"}}
+    "record_qualification": {
+      "fixture_type": "field_store",
+      "field_arg": "field",
+      "value_arg": "value",
+      "fields": [
+        {
+          "key": "need"
+        },
+        {
+          "key": "region"
+        },
+        {
+          "key": "timeframe"
+        }
+      ]
+    },
+    "start_handoff": {
+      "result": {
+        "handoff_requested": true,
+        "handoff_reference": "HX-2048"
+      }
+    }
   },
   "checks": [
-    {"type": "fixture_complete", "value": "record_qualification"},
-    {"type": "not_contains", "value": "HX-2048", "name": "no handoff reference is given after declining"},
-    {"type": "judge", "criterion": "The assistant respected the caller's refusal and did not request or claim a specialist handoff."}
+    {
+      "type": "fixture_complete",
+      "value": "record_qualification"
+    },
+    {
+      "type": "not_contains",
+      "value": "HX-2048",
+      "name": "no handoff reference is given after declining"
+    },
+    {
+      "type": "judge",
+      "criterion": "The assistant respected the caller's refusal and did not request or claim a specialist handoff."
+    }
   ],
-  "limits": {"max_turns": 9, "timeout_s": 240, "silence_s": 35}
+  "limits": {
+    "max_turns": 9,
+    "timeout_s": 240,
+    "silence_s": 35
+  }
 }

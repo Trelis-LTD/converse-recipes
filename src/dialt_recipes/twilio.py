@@ -207,9 +207,12 @@ async def run_call_bridge(websocket: Any, stream_sid: str, call_sid: str, *,
                 try:
                     result = await hooks.execute_tool(name, args)
                     outcome, verified = "succeeded", True
-                except Exception:  # noqa: BLE001 - a failed tool is a result, not a crash
+                except Exception as exc:  # noqa: BLE001 - a failed tool is a result, not a crash
                     logger.exception("Dialt tool %s failed call_sid=%s", name, call_sid)
-                    result, outcome, verified = {"error": "tool_failed"}, "failed", False
+                    # The model gets the failure as stated by the host, so it can decide what
+                    # to say; a bare "tool_failed" told it nothing.
+                    result = {"error": "tool_failed", "detail": str(exc) or type(exc).__name__}
+                    outcome, verified = "failed", False
                 await session.send_tool_result(tool_id, result, outcome=outcome, verified=verified)
             except asyncio.CancelledError:
                 return

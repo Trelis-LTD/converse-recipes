@@ -2,7 +2,7 @@
   "name": "specialist qualification and accepted handoff",
   "starter": "Hi, I need some help choosing the right service.",
   "target": {
-    "instructions": "Help the caller qualify for a specialist. Naturally establish their need, region, and timeframe, recording each answer with record_qualification. Accept corrections and record the corrected answer. Do not read out a checklist. Once all required details are recorded, briefly reflect your understanding and ask whether they want a specialist. Call start_handoff only after the caller explicitly agrees. It is permission-gated, so if permission remains pending, ask them to confirm the handoff once more. Never claim a handoff has started until the tool confirms it. When the result reports handoff_requested, read its reference to the caller, then call end_call with a brief farewell so the transfer can proceed. When no specialist is available, relay the returned next step truthfully.",
+    "instructions": "Help the caller qualify for a specialist. Naturally establish their need, region, and timeframe, recording each answer with record_qualification. Accept corrections and record the corrected answer. Do not read out a checklist. Once all required details are recorded, briefly reflect your understanding and ask whether they want a specialist. Ask whether they want a specialist and call start_handoff only after the caller clearly agrees. Never say a handoff has started until the tool result confirms it. When the result reports handoff_requested, read its reference to the caller, then say goodbye; the call ends on the host's side. When no specialist is available, relay the returned next step truthfully.",
     "tools": [
       {
         "name": "record_qualification",
@@ -10,10 +10,22 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "field": {"type": "string", "enum": ["need", "region", "timeframe"]},
-            "value": {"type": "string"}
+            "field": {
+              "type": "string",
+              "enum": [
+                "need",
+                "region",
+                "timeframe"
+              ]
+            },
+            "value": {
+              "type": "string"
+            }
           },
-          "required": ["field", "value"],
+          "required": [
+            "field",
+            "value"
+          ],
           "additionalProperties": false
         },
         "read_only": false,
@@ -25,16 +37,21 @@
         "description": "Request a specialist handoff after qualification is complete and the caller explicitly agrees.",
         "parameters": {
           "type": "object",
-          "properties": {"summary": {"type": "string"}},
-          "required": ["summary"],
+          "properties": {
+            "summary": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "summary"
+          ],
           "additionalProperties": false
         },
-        "requires_permission": true,
         "expected_duration": "seconds",
         "status_label": "specialist handoff"
       }
     ],
-    "end_call": true
+    "end_call": false
   },
   "simulator": {
     "instructions": "You are Sam, a caller looking for help choosing a business phone service. Stay in the caller role. Reveal facts naturally when asked: you need a service for a ten-person support team, you are in the north region, and you want to start this month. Do not invent tool results or speak for the assistant. After the assistant accurately reflects all three details and asks about a specialist, explicitly agree. If asked to confirm permission again, repeat your direct agreement. Do not end until the assistant reports the real handoff result and reference. Then thank them, say goodbye, and end the conversation."
@@ -44,17 +61,47 @@
       "fixture_type": "field_store",
       "field_arg": "field",
       "value_arg": "value",
-      "fields": [{"key": "need"}, {"key": "region"}, {"key": "timeframe"}]
+      "fields": [
+        {
+          "key": "need"
+        },
+        {
+          "key": "region"
+        },
+        {
+          "key": "timeframe"
+        }
+      ]
     },
     "start_handoff": {
-      "result": {"handoff_requested": true, "handoff_reference": "HX-2048"}
+      "result": {
+        "handoff_requested": true,
+        "handoff_reference": "HX-2048"
+      }
     }
   },
   "checks": [
-    {"type": "fixture_complete", "value": "record_qualification"},
-    {"type": "tool_called", "value": "start_handoff"},
-    {"type": "regex", "value": "H(?:[\\s,.-]|dash)*X(?:[\\s,.-]|dash)*(?:2|two)(?:[\\s,.-]|dash)*(?:0|zero)(?:[\\s,.-]|dash)*(?:4|four)(?:[\\s,.-]|dash)*(?:8|eight)(?!(?:[\\s,.-]|dash)*(?:\\d|zero|one|two|three|four|five|six|seven|eight|nine)\\b)", "name": "the handoff reference reaches the caller"},
-    {"type": "judge", "criterion": "The assistant collected and reflected the need, region, and timeframe, obtained explicit consent, then requested the handoff and reported only the confirmed result."}
+    {
+      "type": "fixture_complete",
+      "value": "record_qualification"
+    },
+    {
+      "type": "tool_called",
+      "value": "start_handoff"
+    },
+    {
+      "type": "regex",
+      "value": "H(?:[\\s,.-]|dash)*X(?:[\\s,.-]|dash)*(?:2|two)(?:[\\s,.-]|dash)*(?:0|zero)(?:[\\s,.-]|dash)*(?:4|four)(?:[\\s,.-]|dash)*(?:8|eight)(?!(?:[\\s,.-]|dash)*(?:\\d|zero|one|two|three|four|five|six|seven|eight|nine)\\b)",
+      "name": "the handoff reference reaches the caller"
+    },
+    {
+      "type": "judge",
+      "criterion": "The assistant collected and reflected the need, region, and timeframe, obtained explicit consent, then requested the handoff and reported only the confirmed result."
+    }
   ],
-  "limits": {"max_turns": 10, "timeout_s": 240, "silence_s": 35}
+  "limits": {
+    "max_turns": 10,
+    "timeout_s": 240,
+    "silence_s": 35
+  }
 }
