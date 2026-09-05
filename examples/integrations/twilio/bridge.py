@@ -33,9 +33,12 @@ from twilio.rest import Client
 from telephony_audio import TelephonyAudioBridge
 
 logger = logging.getLogger("dialt_twilio")
-MULAW_CHUNK_BYTES = 160  # 20 ms; bounds hard-clear playback accounting error.
+MULAW_CHUNK_BYTES = 160  # 20 ms
 TWILIO_SR = 8_000
 PLAYBACK_DRAIN_TIMEOUT_S = 10
+FRAME_MS = 20
+OUTBOUND_LEAD_MS = 200  # the sender may run this far ahead of the line's clock
+MARK_EVERY_MS = 100     # playback accounting granularity; bounds hard-clear error
 
 
 @dataclass(frozen=True)
@@ -371,26 +374,63 @@ async def _run_bridge(
             finally:
                 tool_tasks.pop(tool_id, None)
 
+        async def send_media(chunk: bytes) -> None:
+            await websocket.send_json(
+                {
+                    "event": "media",
+                    "streamSid": stream_sid,
+                    "media": {"payload": base64.b64encode(chunk).decode("ascii")},
+                }
+            )
+
+        async def send_mark(duration_ms: float) -> None:
+            await websocket.send_json(
+                {
+                    "event": "mark",
+                    "streamSid": stream_sid,
+                    "mark": {"name": ledger.add(duration_ms)},
+                }
+            )
+
+        outbound = bytearray()
+        outbound_ready = asyncio.Event()
+
         async def send_mulaw(mulaw: bytes) -> None:
-            for offset in range(0, len(mulaw), MULAW_CHUNK_BYTES):
-                chunk = mulaw[offset : offset + MULAW_CHUNK_BYTES]
-                await websocket.send_json(
-                    {
-                        "event": "media",
-                        "streamSid": stream_sid,
-                        "media": {
-                            "payload": base64.b64encode(chunk).decode("ascii")
-                        },
-                    }
-                )
-                mark_name = ledger.add(len(chunk) * 1000 / TWILIO_SR)
-                await websocket.send_json(
-                    {
-                        "event": "mark",
-                        "streamSid": stream_sid,
-                        "mark": {"name": mark_name},
-                    }
-                )
+            outbound.extend(mulaw)
+            outbound_ready.set()
+
+        def discard_outbound() -> None:
+            outbound.clear()
+
+        async def pace_outbound() -> None:
+            """Send one 20 ms frame per 20 ms, at most OUTBOUND_LEAD_MS ahead of the line's
+            clock, with a playback mark every MARK_EVERY_MS. TTS arrives in bursts; handing
+            Twilio a whole reply at once with a mark after every frame was measured at one
+            fifth of frames never reaching the caller (2026-09-04); pacing halved that and
+            removed every hole longer than 180 ms."""
+            loop = asyncio.get_running_loop()
+            next_at = loop.time()
+            unmarked_ms = 0.0
+            while True:
+                if len(outbound) < MULAW_CHUNK_BYTES and not (upstream_ended.is_set() and outbound):
+                    if unmarked_ms:
+                        await send_mark(unmarked_ms)
+                        unmarked_ms = 0.0
+                    outbound_ready.clear()
+                    await outbound_ready.wait()
+                    next_at = loop.time()
+                    continue
+                chunk = bytes(outbound[:MULAW_CHUNK_BYTES])
+                del outbound[:MULAW_CHUNK_BYTES]
+                await send_media(chunk)
+                unmarked_ms += len(chunk) * 1000 / TWILIO_SR
+                if unmarked_ms >= MARK_EVERY_MS:
+                    await send_mark(unmarked_ms)
+                    unmarked_ms = 0.0
+                next_at += FRAME_MS / 1000
+                delay = next_at - loop.time() - OUTBOUND_LEAD_MS / 1000
+                if delay > 0:
+                    await asyncio.sleep(delay)
 
 
         async def send_twilio() -> None:
@@ -401,6 +441,8 @@ async def _run_bridge(
                     await send_mulaw(audio.dialt_to_twilio(pcm))
                 elif event.type == "interrupted":
                     hard_clear = bool(event.data.get("clear"))
+                    if hard_clear:
+                        discard_outbound()
                     remaining_ms, discarded_ms = ledger.interruption(
                         hard_clear=hard_clear
                     )
@@ -415,6 +457,7 @@ async def _run_bridge(
                         barge_seq=event.data.get("barge_seq"),
                     )
                 elif event.type == "canceled":
+                    discard_outbound()
                     ledger.clear()
                     await websocket.send_json(
                         {"event": "clear", "streamSid": stream_sid}
@@ -438,9 +481,9 @@ async def _run_bridge(
             await send_mulaw(audio.dialt_to_twilio(b"", final=True))
             try:
                 async with asyncio.timeout(PLAYBACK_DRAIN_TIMEOUT_S):
-                    while not ledger.empty():
+                    while outbound or not ledger.empty():
                         ledger.changed.clear()
-                        if ledger.empty():
+                        if not outbound and ledger.empty():
                             break
                         await ledger.changed.wait()
             except TimeoutError:
@@ -452,7 +495,10 @@ async def _run_bridge(
         receive_task = asyncio.create_task(receive_twilio())
         send_task = asyncio.create_task(send_twilio())
         upstream_end_task = asyncio.create_task(upstream_ended.wait())
+        # Only these three decide when the bridge ends. The pacer is a helper: cancelled at the
+        # end, never part of the wait set (a helper finishing is not the call ending).
         bridge_tasks = (receive_task, send_task, upstream_end_task)
+        pacer_task = asyncio.create_task(pace_outbound())
         try:
             done, _ = await asyncio.wait(
                 bridge_tasks, return_when=asyncio.FIRST_COMPLETED
@@ -464,9 +510,9 @@ async def _run_bridge(
             else:
                 receive_task.result()
         finally:
-            for task in bridge_tasks:
+            for task in bridge_tasks + (pacer_task,):
                 task.cancel()
-            await asyncio.gather(*bridge_tasks, return_exceptions=True)
+            await asyncio.gather(*bridge_tasks, pacer_task, return_exceptions=True)
 
             active_tool_tasks = list(tool_tasks.values())
             for task in active_tool_tasks:

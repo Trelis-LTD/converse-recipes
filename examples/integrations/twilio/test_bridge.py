@@ -1,6 +1,8 @@
 import asyncio
+import json
 import re
 from pathlib import Path
+from types import SimpleNamespace
 
 import bridge
 import numpy as np
@@ -206,3 +208,64 @@ def test_env_template_lists_each_setting_once() -> None:
     keys = re.findall(r"^#?\s*([A-Z][A-Z0-9_]*)=", env_template, flags=re.MULTILINE)
     assert keys and len(keys) == len(set(keys)), keys
     assert "DIALT_VOICE" in keys
+
+
+def test_bridge_paces_outbound_audio_and_drains_before_closing(monkeypatch) -> None:
+    """Outbound frames go out one per 20 ms with a mark per 100 ms, not as a burst with a mark
+    per frame; the bridge ends with the session, and a helper task finishing never ends it."""
+    released = asyncio.Event()
+
+    class FakeSession:
+        async def events(self):
+            yield SimpleNamespace(type="audio", t_ms=20, data={}, audio=np.zeros(3200, dtype=np.float32))
+            yield SimpleNamespace(type="done", t_ms=40, data={"turn_id": "turn-1"}, audio=None)
+            await released.wait()
+
+    class FakeConnection:
+        async def __aenter__(self):
+            return FakeSession()
+
+        async def __aexit__(self, *args):
+            return None
+
+    async def fake_connect(*args, **kwargs):
+        return FakeConnection()
+
+    class FakeWebSocket:
+        def __init__(self) -> None:
+            self.sent: list[dict[str, object]] = []
+
+        async def send_json(self, message) -> None:
+            self.sent.append(message)
+            # The streaming resampler holds back part of the first chunk until the final flush.
+            if sum(1 for m in self.sent if m.get("event") == "media") >= 4:
+                released.set()
+
+        async def iter_text(self):
+            acknowledged: set[str] = set()
+            while True:
+                pending = next((m for m in self.sent if m.get("event") == "mark"
+                                and m["mark"]["name"] not in acknowledged), None)
+                if pending is not None:
+                    acknowledged.add(pending["mark"]["name"])
+                    yield json.dumps({"event": "mark", "mark": {"name": pending["mark"]["name"]}})
+                    continue
+                await asyncio.sleep(0)
+
+    monkeypatch.setenv("DIALT_API_KEY", "ck_test")
+    monkeypatch.setenv("TWILIO_AUTH_TOKEN", "t")
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://voice.example.com")
+    bridge.get_settings.cache_clear() if hasattr(bridge.get_settings, "cache_clear") else None
+    monkeypatch.setattr(bridge.DialtSession, "connect", fake_connect)
+    websocket = FakeWebSocket()
+    settings = bridge.Settings(dialt_api_key="ck_test", twilio_auth_token="t", public_base_url="https://voice.example.com")
+
+    async def run() -> None:
+        await asyncio.wait_for(bridge._run_bridge(websocket, "MZ-test", "CA-paced", settings), timeout=5.0)
+
+    asyncio.run(run())
+    media = [m for m in websocket.sent if m.get("event") == "media"]
+    marks = [m for m in websocket.sent if m.get("event") == "mark"]
+    assert 5 <= len(media) <= 10          # 200 ms of audio: five frames before the final flush
+    assert 1 <= len(marks) <= 3           # one mark per 100 ms, not one per frame
+    assert all(len(m["media"]["payload"]) <= 216 for m in media)   # 160 bytes base64
