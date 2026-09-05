@@ -62,6 +62,14 @@ The tests are offline and require no Dialt or Twilio credentials.
 
 This is an inbound reference integration, not a dialer.
 
+## Built on dialt_recipes.twilio
+
+The transport (paced outbound audio, playback accounting, barge-in clears, tool dispatch, drain
+and hang-up) lives in the `dialt_recipes.twilio` module of this repository's package, so this
+file is only what is yours: configuration, the routes Twilio calls, the agent's mode, and what
+each tool does. Inside the repository the example runs against the checkout; a standalone copy
+installs `dialt-recipes` from git through its `pyproject.toml`.
+
 ## Opener and outbound audio
 
 `DIALT_GREETING` is spoken on pickup, pre-rendered so the caller hears it at once. Since

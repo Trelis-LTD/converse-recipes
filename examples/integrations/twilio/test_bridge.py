@@ -8,18 +8,19 @@ import bridge
 import numpy as np
 import pytest
 from bridge import (
-    PlaybackLedger,
     _signature_is_valid,
     execute_tool,
     get_settings,
     tool_manifest,
 )
-from telephony_audio import (
+from dialt_recipes.telephony_audio import (
     TelephonyAudioBridge,
     decode_mulaw,
     mulaw_8k_to_pcm16_16k,
     pcm16_16k_to_mulaw_8k,
 )
+from dialt_recipes import twilio as core
+from dialt_recipes.twilio import PlaybackLedger
 from twilio.request_validator import RequestValidator
 
 
@@ -256,7 +257,7 @@ def test_bridge_paces_outbound_audio_and_drains_before_closing(monkeypatch) -> N
     monkeypatch.setenv("TWILIO_AUTH_TOKEN", "t")
     monkeypatch.setenv("PUBLIC_BASE_URL", "https://voice.example.com")
     bridge.get_settings.cache_clear() if hasattr(bridge.get_settings, "cache_clear") else None
-    monkeypatch.setattr(bridge.DialtSession, "connect", fake_connect)
+    monkeypatch.setattr(core.DialtSession, "connect", fake_connect)
     websocket = FakeWebSocket()
     settings = bridge.Settings(dialt_api_key="ck_test", twilio_auth_token="t", public_base_url="https://voice.example.com")
 

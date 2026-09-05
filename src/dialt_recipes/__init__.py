@@ -3,8 +3,9 @@
 from .conversation_plan import ConversationPlan, PlanField
 from .guided import GuidedAssistant
 from .simulation import SimulationCase, SimulationReport, run_simulation
+from .twilio import BridgeHooks, TwilioBridgeSettings, run_call_bridge
 
 __all__ = [
-    "ConversationPlan", "GuidedAssistant", "PlanField", "SimulationCase",
-    "SimulationReport", "run_simulation",
+    "BridgeHooks", "ConversationPlan", "GuidedAssistant", "PlanField", "SimulationCase",
+    "SimulationReport", "TwilioBridgeSettings", "run_call_bridge", "run_simulation",
 ]

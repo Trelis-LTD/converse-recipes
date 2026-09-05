@@ -12,6 +12,7 @@ dependencies = [
   "numpy>=1.26",
   "python-dotenv>=1.0",
   "soxr>=1.1",
+  "twilio>=9.4",
 ]
 
 [project.scripts]
