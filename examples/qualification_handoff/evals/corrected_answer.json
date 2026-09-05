@@ -2,12 +2,32 @@
   "name": "specialist qualification accepts a correction",
   "starter": "Hello, I want to see whether your service is suitable for us.",
   "target": {
-    "instructions": "Help the caller qualify for a specialist. Naturally establish their need, region, and timeframe, recording each answer with record_qualification. Accept corrections and record the corrected answer. Do not read out a checklist. Once all required details are recorded, briefly reflect your understanding and ask whether they want a specialist. Call start_handoff only after the caller explicitly agrees. It is permission-gated, so if permission remains pending, ask them to confirm the handoff once more. Never claim a handoff has started until the tool confirms it. When the result reports handoff_requested, read its reference to the caller, then call end_call with a brief farewell so the transfer can proceed. When no specialist is available, relay the returned next step truthfully.",
+    "instructions": "Help the caller qualify for a specialist. Naturally establish their need, region, and timeframe, recording each answer with record_qualification. Accept corrections and record the corrected answer. Do not read out a checklist. Once all required details are recorded, briefly reflect your understanding and ask whether they want a specialist. Ask whether they want a specialist and call start_handoff only after the caller clearly agrees. Never say a handoff has started until the tool result confirms it. When the result reports handoff_requested, read its reference to the caller, then say goodbye; the call ends on the host's side. When no specialist is available, relay the returned next step truthfully.",
     "tools": [
       {
         "name": "record_qualification",
         "description": "Record or correct one qualification answer after the caller provides it.",
-        "parameters": {"type": "object", "properties": {"field": {"type": "string", "enum": ["need", "region", "timeframe"]}, "value": {"type": "string"}}, "required": ["field", "value"], "additionalProperties": false},
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "field": {
+              "type": "string",
+              "enum": [
+                "need",
+                "region",
+                "timeframe"
+              ]
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "field",
+            "value"
+          ],
+          "additionalProperties": false
+        },
         "read_only": false,
         "expected_duration": "instant",
         "status_label": "qualification"
@@ -15,26 +35,72 @@
       {
         "name": "start_handoff",
         "description": "Request a specialist handoff after qualification is complete and the caller explicitly agrees.",
-        "parameters": {"type": "object", "properties": {"summary": {"type": "string"}}, "required": ["summary"], "additionalProperties": false},
-        "requires_permission": true,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "summary"
+          ],
+          "additionalProperties": false
+        },
         "expected_duration": "seconds",
         "status_label": "specialist handoff"
       }
     ],
-    "end_call": true
+    "end_call": false
   },
   "simulator": {
     "instructions": "You are Jordan, qualifying for a specialist. Stay in the caller role. Say you need help replacing an old booking system, initially say south region, and say the change is needed next quarter. Later, before approving a handoff, correct the region to north. Do not approve until the assistant reflects the corrected north region together with your need and timeframe. Then explicitly agree to the specialist. If permission needs confirmation, agree again. Do not invent results. End only after hearing the confirmed handoff reference."
   },
   "fixtures": {
-    "record_qualification": {"fixture_type": "field_store", "field_arg": "field", "value_arg": "value", "fields": [{"key": "need"}, {"key": "region"}, {"key": "timeframe"}]},
-    "start_handoff": {"result": {"handoff_requested": true, "handoff_reference": "HX-2048"}}
+    "record_qualification": {
+      "fixture_type": "field_store",
+      "field_arg": "field",
+      "value_arg": "value",
+      "fields": [
+        {
+          "key": "need"
+        },
+        {
+          "key": "region"
+        },
+        {
+          "key": "timeframe"
+        }
+      ]
+    },
+    "start_handoff": {
+      "result": {
+        "handoff_requested": true,
+        "handoff_reference": "HX-2048"
+      }
+    }
   },
   "checks": [
-    {"type": "fixture_complete", "value": "record_qualification"},
-    {"type": "tool_called", "value": "start_handoff"},
-    {"type": "regex", "value": "H(?:[\\s,.-]|dash)*X(?:[\\s,.-]|dash)*(?:2|two)(?:[\\s,.-]|dash)*(?:0|zero)(?:[\\s,.-]|dash)*(?:4|four)(?:[\\s,.-]|dash)*(?:8|eight)(?!(?:[\\s,.-]|dash)*(?:\\d|zero|one|two|three|four|five|six|seven|eight|nine)\\b)"},
-    {"type": "judge", "criterion": "The assistant accepted and recorded the caller's correction, reflected north as the final region with the other details, and requested handoff only after explicit consent."}
+    {
+      "type": "fixture_complete",
+      "value": "record_qualification"
+    },
+    {
+      "type": "tool_called",
+      "value": "start_handoff"
+    },
+    {
+      "type": "regex",
+      "value": "H(?:[\\s,.-]|dash)*X(?:[\\s,.-]|dash)*(?:2|two)(?:[\\s,.-]|dash)*(?:0|zero)(?:[\\s,.-]|dash)*(?:4|four)(?:[\\s,.-]|dash)*(?:8|eight)(?!(?:[\\s,.-]|dash)*(?:\\d|zero|one|two|three|four|five|six|seven|eight|nine)\\b)"
+    },
+    {
+      "type": "judge",
+      "criterion": "The assistant accepted and recorded the caller's correction, reflected north as the final region with the other details, and requested handoff only after explicit consent."
+    }
   ],
-  "limits": {"max_turns": 11, "timeout_s": 240, "silence_s": 35}
+  "limits": {
+    "max_turns": 11,
+    "timeout_s": 240,
+    "silence_s": 35
+  }
 }
