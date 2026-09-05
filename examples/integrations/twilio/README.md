@@ -61,3 +61,16 @@ uv run pytest -q
 The tests are offline and require no Dialt or Twilio credentials.
 
 This is an inbound reference integration, not a dialer.
+
+## Opener and outbound audio
+
+`DIALT_GREETING` is spoken on pickup, pre-rendered so the caller hears it at once. Since
+dialt-sdk 0.20 it is the conversation's first assistant turn: the agent knows it said it, the
+caller can interrupt it, and only the heard prefix stays in context. It may therefore ask the
+first question.
+
+Outbound audio is sent at the line's own rate: one 20 ms frame per 20 ms, at most 200 ms ahead,
+with a playback mark every 100 ms. Sending each reply as a burst with a mark per frame was
+measured (Twilio's dual-channel recording against the session's own track, 2026-09-04) at one
+fifth of frames never reaching the caller; pacing halved that and removed every hole longer
+than 180 ms.
